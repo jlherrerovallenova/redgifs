@@ -15,26 +15,30 @@ export interface MergeProgress {
  * Detecta el mejor formato de video soportado por el navegador para grabación.
  */
 export function getSupportedMimeType(): { mimeType: string; extension: string } {
-  if (typeof MediaRecorder === 'undefined') {
-    return { mimeType: 'video/webm', extension: 'webm' };
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return { mimeType: '', extension: 'mp4' };
   }
 
   const types = [
-    { mime: 'video/mp4;codecs=avc1,mp4a.40.2', ext: 'mp4' },
-    { mime: 'video/mp4;codecs=avc1', ext: 'mp4' },
+    { mime: 'video/mp4;codecs="avc1,mp4a.40.2"', ext: 'mp4' },
+    { mime: 'video/mp4;codecs="avc1"', ext: 'mp4' },
     { mime: 'video/mp4', ext: 'mp4' },
-    { mime: 'video/webm;codecs=vp9,opus', ext: 'webm' },
-    { mime: 'video/webm;codecs=vp8,opus', ext: 'webm' },
+    { mime: 'video/webm;codecs="vp9,opus"', ext: 'webm' },
+    { mime: 'video/webm;codecs="vp8,opus"', ext: 'webm' },
     { mime: 'video/webm', ext: 'webm' }
   ];
 
   for (const t of types) {
-    if (MediaRecorder.isTypeSupported(t.mime)) {
-      return { mimeType: t.mime, extension: t.ext };
+    try {
+      if (MediaRecorder.isTypeSupported(t.mime)) {
+        return { mimeType: t.mime, extension: t.ext };
+      }
+    } catch {
+      // Ignorar excepciones de sintaxis de navegadores con parser estricto (Safari/WebKit)
     }
   }
 
-  return { mimeType: 'video/webm', extension: 'webm' };
+  return { mimeType: '', extension: 'mp4' };
 }
 
 /**
@@ -108,7 +112,13 @@ export async function mergeVideoBlobs(
 
   // 3. Capturar stream del canvas y combinar con audio
   const fps = 30;
-  const canvasStream = canvas.captureStream ? canvas.captureStream(fps) : (canvas as any).mozCaptureStream(fps);
+  let canvasStream: MediaStream;
+  try {
+    canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(fps) : (canvas as any).mozCaptureStream(fps);
+  } catch {
+    canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream() : (canvas as any).mozCaptureStream();
+  }
+
   const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
 
   if (audioDest && audioDest.stream.getAudioTracks().length > 0) {
@@ -117,12 +127,20 @@ export async function mergeVideoBlobs(
 
   const combinedStream = new MediaStream(tracks);
 
-  // 4. Inicializar MediaRecorder
+  // 4. Inicializar MediaRecorder de forma segura para Safari / Chrome / Firefox
   const recordedChunks: Blob[] = [];
-  const recorder = new MediaRecorder(combinedStream, {
-    mimeType,
-    videoBitsPerSecond: 4_500_000 // 4.5 Mbps para alta calidad
-  });
+  let recorder: MediaRecorder;
+  const recorderOptions: MediaRecorderOptions = {};
+  if (mimeType) {
+    recorderOptions.mimeType = mimeType;
+  }
+
+  try {
+    recorder = new MediaRecorder(combinedStream, recorderOptions);
+  } catch {
+    // Si falla con opciones en Safari, inicializar con el contenedor predeterminado del sistema
+    recorder = new MediaRecorder(combinedStream);
+  }
 
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) {
@@ -134,9 +152,8 @@ export async function mergeVideoBlobs(
 
   // 5. Reproducir y dibujar cada video secuencialmente
   const playVideo = document.createElement('video');
-  playVideo.crossOrigin = 'anonymous';
   playVideo.playsInline = true;
-  playVideo.muted = false; // El audio va al AudioContext
+  playVideo.muted = false; // El audio va al AudioContext // El audio va al AudioContext
 
   let audioSourceNode: MediaElementAudioSourceNode | null = null;
   if (audioCtx && audioDest) {
