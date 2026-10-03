@@ -18,3 +18,4 @@ downloads/*.mov
 .idea/
 .DS_Store
 Thumbs.db
+.env
