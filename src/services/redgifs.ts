@@ -4,22 +4,60 @@ let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
 /**
- * Cliente HTTP universal con proxy Vite anti-CORS para iPad, iPhone, Bolt.new y PC.
+ * Consulta un endpoint de RedGIFs asegurando que la respuesta sea JSON legítimo
+ * y evitando excepciones de parsing HTML en Safari / iOS.
  */
-async function fetchRedGifs(path: string, options: RequestInit = {}): Promise<Response> {
-  // 1. Probar primero el proxy de Vite (/api/redgifs), evitando cualquier bloqueo de CORS en iPad y otros dispositivos
+async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(`/api/redgifs${path}`, options);
-    // Si responde correctamente o con 404 de la propia API, retornamos
-    if (res.status === 200 || res.status === 404 || res.status === 400) {
-      return res;
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+
+    // Si la respuesta no es JSON (p. ej. si un router SPA devuelve index.html), descartar inmediatamente
+    if (!contentType.includes('json')) {
+      return null;
     }
-  } catch (err) {
-    console.warn('Proxy Vite no disponible, usando conexión directa:', err);
+
+    if (res.status === 404 || res.status === 410) {
+      throw new Error('El video solicitado no existe o ha sido eliminado.');
+    }
+
+    if (!res.ok) {
+      throw new Error(`Error en servidor RedGIFs: HTTP ${res.status}`);
+    }
+
+    const text = await res.text();
+    return JSON.parse(text) as T;
+  } catch (err: any) {
+    if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  // 1. Probar directo con la API pública de RedGIFs (compatible nativamente con CORS)
+  const directData = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
+  if (directData !== null) {
+    return directData;
   }
 
-  // 2. Fallback directo a la API pública de RedGIFs
-  return await fetch(`https://api.redgifs.com/v2${path}`, options);
+  // 2. Probar mediante el proxy de desarrollo de Vite (/api/redgifs) si está activo
+  const proxyData = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
+  if (proxyData !== null) {
+    return proxyData;
+  }
+
+  // 3. Fallback adicional con proxy CORS público para entornos web aislados como Bolt.new
+  const fallbackData = await tryFetchEndpoint<T>(
+    `https://corsproxy.io/?url=${encodeURIComponent(`https://api.redgifs.com/v2${path}`)}`,
+    options
+  );
+  if (fallbackData !== null) {
+    return fallbackData;
+  }
+
+  throw new Error('No se pudo conectar con la API de RedGIFs. Comprueba tu conexión a internet.');
 }
 
 /**
@@ -31,16 +69,15 @@ export async function getAuthToken(): Promise<string> {
     return cachedToken;
   }
 
-  const response = await fetchRedGifs('/auth/temporary');
-  if (!response.ok) {
-    throw new Error(`Error de autenticación con RedGIFs: HTTP ${response.status}`);
+  const data = await requestRedGifsJson<{ token: string }>('/auth/temporary');
+  if (!data?.token) {
+    throw new Error('No se pudo obtener el token de autorización de RedGIFs.');
   }
 
-  const data = await response.json();
   cachedToken = data.token;
   tokenExpiry = now + 25 * 60 * 1000; // 25 minutos
 
-  return cachedToken!;
+  return cachedToken;
 }
 
 /**
@@ -77,21 +114,12 @@ export async function getVideoInfo(urlOrId: string): Promise<RedGifItem> {
   }
 
   const token = await getAuthToken();
-  const response = await fetchRedGifs(`/gifs/${gifId}`, {
+  const data = await requestRedGifsJson<any>(`/gifs/${gifId}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
   });
 
-  if (response.status === 404) {
-    throw new Error(`El video '${gifId}' no existe o ha sido eliminado.`);
-  }
-
-  if (!response.ok) {
-    throw new Error(`Error al consultar video: HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
   const gif = data.gif || {};
   const urls = gif.urls || {};
 
@@ -122,17 +150,12 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
     page: String(page)
   });
 
-  const response = await fetchRedGifs(`/gifs/search?${params.toString()}`, {
+  const data = await requestRedGifsJson<any>(`/gifs/search?${params.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
   });
 
-  if (!response.ok) {
-    throw new Error(`Error al buscar en RedGIFs: HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
   const gifs = data.gifs || [];
 
   return gifs.map((g: any) => {
