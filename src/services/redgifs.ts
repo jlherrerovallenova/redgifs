@@ -4,6 +4,25 @@ let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
 /**
+ * Cliente HTTP universal con proxy Vite anti-CORS para iPad, iPhone, Bolt.new y PC.
+ */
+async function fetchRedGifs(path: string, options: RequestInit = {}): Promise<Response> {
+  // 1. Probar primero el proxy de Vite (/api/redgifs), evitando cualquier bloqueo de CORS en iPad y otros dispositivos
+  try {
+    const res = await fetch(`/api/redgifs${path}`, options);
+    // Si responde correctamente o con 404 de la propia API, retornamos
+    if (res.status === 200 || res.status === 404 || res.status === 400) {
+      return res;
+    }
+  } catch (err) {
+    console.warn('Proxy Vite no disponible, usando conexión directa:', err);
+  }
+
+  // 2. Fallback directo a la API pública de RedGIFs
+  return await fetch(`https://api.redgifs.com/v2${path}`, options);
+}
+
+/**
  * Obtiene o renueva el token temporal de autorización de RedGIFs.
  */
 export async function getAuthToken(): Promise<string> {
@@ -20,7 +39,7 @@ export async function getAuthToken(): Promise<string> {
     return cachedToken;
   }
 
-  const response = await fetch('https://api.redgifs.com/v2/auth/temporary');
+  const response = await fetchRedGifs('/auth/temporary');
   if (!response.ok) {
     throw new Error(`Error de autenticación con RedGIFs: HTTP ${response.status}`);
   }
@@ -39,13 +58,24 @@ export async function getAuthToken(): Promise<string> {
  * Extrae el ID limpio de cualquier enlace o texto de RedGIFs.
  */
 export function extractId(urlOrId: string): string {
-  const text = urlOrId.trim();
+  let text = urlOrId.trim();
+  // Quitar barra final si la tiene
+  if (text.endsWith('/')) {
+    text = text.slice(0, -1);
+  }
+
+  // Match /watch/id o /ifr/id
   const match = text.match(/redgifs\.com\/(?:watch|ifr)\/([a-zA-Z0-9_-]+)/i);
   if (match) {
     return match[1].toLowerCase();
   }
-  const clean = text.split('/').pop()?.split('?')[0].split('#')[0];
-  return clean ? clean.toLowerCase() : text.toLowerCase();
+
+  // Si es un enlace directo tipo media.redgifs.com/Id.mp4
+  let clean = text.split('/').pop()?.split('?')[0].split('#')[0] || text;
+  clean = clean.replace(/\.(mp4|webm|jpg|jpeg|gif)$/i, '');
+  clean = clean.replace(/-(mobile|silent|poster)$/i, '');
+
+  return clean.toLowerCase();
 }
 
 /**
@@ -58,7 +88,7 @@ export async function getVideoInfo(urlOrId: string): Promise<RedGifItem> {
   }
 
   const token = await getAuthToken();
-  const response = await fetch(`https://api.redgifs.com/v2/gifs/${gifId}`, {
+  const response = await fetchRedGifs(`/gifs/${gifId}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -103,7 +133,7 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
     page: String(page)
   });
 
-  const response = await fetch(`https://api.redgifs.com/v2/gifs/search?${params.toString()}`, {
+  const response = await fetchRedGifs(`/gifs/search?${params.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -132,9 +162,6 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
   });
 }
 
-/**
- * Descarga el video en el navegador mediante Blob con reporte de progreso en vivo.
- */
 /**
  * Detecta si el dispositivo es iOS / iPadOS.
  */

@@ -26,6 +26,7 @@ export default function App() {
   // Single Download State
   const [inputUrl, setInputUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [video, setVideo] = useState<RedGifItem | null>(null);
   const [singleDlProgress, setSingleDlProgress] = useState<{
     active: boolean;
@@ -92,7 +93,9 @@ export default function App() {
   // Analyze single link
   const handleAnalyze = async (urlToAnalyze?: string) => {
     const target = (urlToAnalyze || inputUrl).trim();
+    setAnalysisError(null);
     if (!target) {
+      setAnalysisError('Por favor introduce un enlace o ID de RedGIFs.');
       showToast('Introduce un enlace o ID de RedGIFs');
       return;
     }
@@ -104,7 +107,9 @@ export default function App() {
       setVideo(data);
       showToast('¡Video encontrado!');
     } catch (err: any) {
-      showToast(err.message || 'Error al consultar video');
+      const msg = err.message || 'Error al consultar video';
+      setAnalysisError(msg);
+      showToast(msg);
     } finally {
       setIsAnalyzing(false);
     }
@@ -295,29 +300,45 @@ export default function App() {
                 Pega el enlace o ID para previsualizarlo y guardarlo directamente en tu dispositivo en máxima calidad con audio.
               </p>
 
-              {/* Input Box */}
-              <div className="max-w-2xl mx-auto mt-6 bg-[#12141c] border border-white/10 rounded-full p-2 flex items-center gap-2 shadow-2xl focus-within:border-red-500/60 transition">
+              {/* Input Box Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAnalyze();
+                }}
+                className="max-w-2xl mx-auto mt-6 bg-[#12141c] border border-white/10 rounded-full p-2 flex items-center gap-2 shadow-2xl focus-within:border-red-500/60 transition"
+              >
                 <input
                   type="text"
                   value={inputUrl}
-                  onChange={(e) => setInputUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                  onChange={(e) => {
+                    setInputUrl(e.target.value);
+                    if (analysisError) setAnalysisError(null);
+                  }}
                   placeholder="Pega el enlace (ej: https://www.redgifs.com/watch/...)"
                   className="flex-1 bg-transparent px-4 text-sm md:text-base outline-none text-white placeholder-slate-500"
                 />
                 {inputUrl && (
-                  <button onClick={() => setInputUrl('')} className="p-2 text-slate-400 hover:text-white">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInputUrl('');
+                      setAnalysisError(null);
+                    }}
+                    className="p-2 text-slate-400 hover:text-white"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={handlePaste}
                   className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-full text-xs font-semibold transition"
                 >
                   <Clipboard className="w-3.5 h-3.5" /> Pegar
                 </button>
                 <button
-                  onClick={() => handleAnalyze()}
+                  type="submit"
                   disabled={isAnalyzing}
                   className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-5 py-2 rounded-full text-sm font-bold flex items-center gap-1.5 shadow-lg shadow-red-500/25 transition disabled:opacity-50"
                 >
@@ -330,7 +351,24 @@ export default function App() {
                     </>
                   )}
                 </button>
-              </div>
+              </form>
+
+              {/* Inline Error Message */}
+              {analysisError && (
+                <div className="max-w-2xl mx-auto mt-3 bg-red-500/15 border border-red-500/30 text-red-200 p-3 rounded-xl text-xs flex items-center justify-between text-left animate-fadeIn">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{analysisError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAnalysisError(null)}
+                    className="text-red-400 hover:text-white text-xs px-2 py-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Video Preview Card */}
