@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RedGIFs Downloader Pro | Descargador de Videos HD</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ef4444'><polygon points='5 3 19 12 5 21 5 3'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- Ambient Glow -->
+  <div class="ambient-glow glow-red"></div>
+  <div class="ambient-glow glow-purple"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-badge">RG</div>
+        <div class="brand-text">
+          <span class="brand-title">RED<span class="gradient-text">GIFS</span> DOWNLOADER</span>
+          <span class="brand-sub">HERRAMIENTA DE DESCARGA HD / SD</span>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="single">
+          <span>📥</span> Descargar Enlace
+        </button>
+        <button class="nav-tab" data-tab="batch">
+          <span>📑</span> Descarga por Lotes
+        </button>
+        <button class="nav-tab" data-tab="search">
+          <span>🔍</span> Explorar RedGIFs
+        </button>
+        <button class="nav-tab" data-tab="library">
+          <span>📁</span> Mis Descargas
+          <span class="count-pill" id="downloadsCountPill">0</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+
+    <!-- Tab 1: Single Download & Preview -->
+    <section class="tab-content active" id="tab-single">
+      <div class="hero-box">
+        <h1 class="hero-title">Descarga videos de RedGIFs al instante</h1>
+        <p class="hero-desc">Pega el enlace o ID del video para previsualizarlo y guardarlo en máxima resolución HD con audio.</p>
+        
+        <div class="input-card">
+          <div class="input-group">
+            <span class="input-icon">🔗</span>
+            <input 
+              type="text" 
+              id="singleUrlInput" 
+              placeholder="Pega aquí el enlace (ej: https://www.redgifs.com/watch/...)"
+              autocomplete="off"
+            >
+            <button class="btn-icon" id="pasteBtn" title="Pegar del portapapeles">📋 Pegar</button>
+            <button class="btn-icon" id="clearBtn" title="Limpiar">✕</button>
+            <button class="btn-primary" id="analyzeBtn">
+              <span>Analizar</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video Preview Card (Hidden initially) -->
+      <div class="preview-container" id="previewContainer" style="display: none;">
+        <div class="preview-card">
+          <div class="preview-media">
+            <video id="previewVideo" controls loop playsinline></video>
+          </div>
+          <div class="preview-details">
+            <div class="preview-header">
+              <span class="user-badge" id="previewUser">@usuario</span>
+              <span class="duration-badge" id="previewDuration">0.0s</span>
+            </div>
+            <h3 class="preview-title" id="previewTitle">Título del Video</h3>
+            
+            <div class="meta-stats">
+              <span id="previewViews">👁️ 0 vistas</span>
+              <span id="previewLikes">❤️ 0 likes</span>
+            </div>
+
+            <div class="tags-cloud" id="previewTags"></div>
+
+            <div class="download-actions">
+              <button class="dl-btn dl-hd" id="downloadHdBtn">
+                <span class="btn-icon-large">⚡</span>
+                <div class="btn-text-group">
+                  <span class="btn-main-text">Descargar Calidad HD</span>
+                  <span class="btn-sub-text">Máxima resolución (1080p/720p)</span>
+                </div>
+              </button>
+
+              <button class="dl-btn dl-sd" id="downloadSdBtn">
+                <span class="btn-icon-large">📱</span>
+                <div class="btn-text-group">
+                  <span class="btn-main-text">Descargar Calidad SD</span>
+                  <span class="btn-sub-text">Versión ligera para móvil</span>
+                </div>
+              </button>
+            </div>
+
+            <div class="download-status" id="singleDlStatus" style="display: none;">
+              <div class="status-spinner"></div>
+              <span id="singleDlStatusText">Descargando archivo...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Batch Download -->
+    <section class="tab-content" id="tab-batch">
+      <div class="batch-card">
+        <h2 class="section-title">📑 Descarga Masiva por Lotes</h2>
+        <p class="section-desc">Pega múltiples enlaces de RedGIFs (uno por línea) para descargarlos todos juntos a tu computadora.</p>
+
+        <textarea 
+          id="batchTextarea" 
+          rows="7" 
+          placeholder="https://www.redgifs.com/watch/video1&#10;https://www.redgifs.com/watch/video2&#10;https://www.redgifs.com/watch/video3"
+        ></textarea>
+
+        <div class="batch-controls">
+          <div class="quality-select-wrapper">
+            <label>Calidad preferida:</label>
+            <select id="batchQualitySelect">
+              <option value="hd">HD (Alta Resolución)</option>
+              <option value="sd">SD (Resolución Móvil)</option>
+            </select>
+          </div>
+
+          <div class="batch-buttons">
+            <button class="btn-secondary" id="clearBatchBtn">Limpiar Lista</button>
+            <button class="btn-primary" id="startBatchBtn">
+              <span>Comenzar Descarga por Lotes</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Batch Progress -->
+        <div class="batch-progress-box" id="batchProgressBox" style="display: none;">
+          <div class="progress-info">
+            <span id="batchProgressLabel">Descargando videos...</span>
+            <span id="batchProgressCount">0 / 0</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="batchProgressBar" style="width: 0%;"></div>
+          </div>
+          <div class="batch-log" id="batchLog"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Search / Explore -->
+    <section class="tab-content" id="tab-search">
+      <div class="search-header">
+        <h2 class="section-title">🔍 Explorar y Descargar de RedGIFs</h2>
+        <p class="section-desc">Busca directamente por palabras clave, creadores o categorías.</p>
+
+        <div class="search-bar-wrap">
+          <input type="text" id="redgifsSearchInput" placeholder="Escribe un tema o etiqueta para buscar...">
+          <button class="btn-primary" id="redgifsSearchBtn">Buscar Videos</button>
+        </div>
+      </div>
+
+      <div class="search-grid" id="searchGrid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- Tab 4: Local Library (Downloads) -->
+    <section class="tab-content" id="tab-library">
+      <div class="library-header">
+        <div>
+          <h2 class="section-title">📁 Videos Descargados</h2>
+          <p class="section-desc" id="libraryPathDesc">Ubicación local en tu equipo</p>
+        </div>
+        <div class="library-actions">
+          <button class="btn-primary" id="openFolderBtn">
+            <span>📂 Abrir Carpeta en Windows</span>
+          </button>
+          <button class="btn-secondary" id="refreshLibraryBtn">
+            <span>🔄 Actualizar</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="library-grid" id="libraryGrid">
+        <!-- Downloaded files list -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Video Player Lightbox Modal -->
+  <div class="lightbox-modal" id="videoLightbox" style="display: none;">
+    <div class="lightbox-content">
+      <div class="lightbox-header">
+        <span id="lightboxTitle">Reproduciendo Video</span>
+        <button class="lightbox-close" id="lightboxCloseBtn">✕</button>
+      </div>
+      <video id="lightboxVideo" controls autoplay loop playsinline></video>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
