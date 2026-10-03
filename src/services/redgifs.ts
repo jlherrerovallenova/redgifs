@@ -164,14 +164,12 @@ export function isIOS(): boolean {
 }
 
 /**
- * Descarga el video en el navegador mediante Blob con reporte de progreso en vivo,
- * con soporte especial para iOS / iPadOS (Web Share API / Fotos).
+ * Descarga el video en memoria como Blob con reporte de progreso en vivo.
  */
-export async function downloadVideoFile(
+export async function fetchVideoBlob(
   mediaUrl: string,
-  filename: string,
   onProgress?: (progressPercent: number, downloadedMb: number, totalMb: number) => void
-): Promise<void> {
+): Promise<Blob> {
   const response = await fetch(mediaUrl);
   if (!response.ok) {
     throw new Error(`Fallo al descargar archivo: HTTP ${response.status}`);
@@ -182,9 +180,7 @@ export async function downloadVideoFile(
   const totalMb = totalBytes > 0 ? Math.round((totalBytes / (1024 * 1024)) * 10) / 10 : 0;
 
   if (!response.body) {
-    const blob = await response.blob();
-    await triggerBlobDownload(blob, filename, mediaUrl);
-    return;
+    return await response.blob();
   }
 
   const reader = response.body.getReader();
@@ -206,15 +202,26 @@ export async function downloadVideoFile(
     }
   }
 
-  const blob = new Blob(chunks as any, { type: 'video/mp4' });
+  return new Blob(chunks as any, { type: 'video/mp4' });
+}
+
+/**
+ * Descarga y dispara el guardado del archivo en el sistema operativo.
+ */
+export async function downloadVideoFile(
+  mediaUrl: string,
+  filename: string,
+  onProgress?: (progressPercent: number, downloadedMb: number, totalMb: number) => void
+): Promise<void> {
+  const blob = await fetchVideoBlob(mediaUrl, onProgress);
   await triggerBlobDownload(blob, filename, mediaUrl);
 }
 
-async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: string): Promise<void> {
+export async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: string): Promise<void> {
   // 1. Si es iOS / iPadOS y soporta Web Share API con archivos, guardar directamente en Fotos/Archivos
   if (isIOS() && typeof navigator !== 'undefined' && 'canShare' in navigator) {
     try {
-      const file = new File([blob], filename, { type: 'video/mp4' });
+      const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
