@@ -31,14 +31,6 @@ export async function getAuthToken(): Promise<string> {
     return cachedToken;
   }
 
-  const stored = localStorage.getItem('rg_token');
-  const storedExp = localStorage.getItem('rg_token_exp');
-  if (stored && storedExp && now < Number(storedExp)) {
-    cachedToken = stored;
-    tokenExpiry = Number(storedExp);
-    return cachedToken;
-  }
-
   const response = await fetchRedGifs('/auth/temporary');
   if (!response.ok) {
     throw new Error(`Error de autenticación con RedGIFs: HTTP ${response.status}`);
@@ -47,9 +39,6 @@ export async function getAuthToken(): Promise<string> {
   const data = await response.json();
   cachedToken = data.token;
   tokenExpiry = now + 25 * 60 * 1000; // 25 minutos
-
-  localStorage.setItem('rg_token', cachedToken!);
-  localStorage.setItem('rg_token_exp', String(tokenExpiry));
 
   return cachedToken!;
 }
@@ -255,7 +244,7 @@ async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: s
   } catch (e) {
     // 3. Fallback de seguridad: abrir URL directa en nueva pestaña si Safari bloquea blobs
     if (originalUrl) {
-      window.open(originalUrl, '_blank');
+      window.open(originalUrl, '_blank', 'noopener,noreferrer');
     }
   }
 }
