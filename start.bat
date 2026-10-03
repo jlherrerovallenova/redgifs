@@ -1,16 +1,15 @@
 @echo off
-title RedGIFs Downloader Pro
+title RedGIFs Downloader Pro - Vite / Web
 color 0c
 
 echo ========================================================
-echo         REDGIFS VIDEO DOWNLOADER PRO - V1.0
+echo         REDGIFS VIDEO DOWNLOADER PRO (VITE WEB)
 echo ========================================================
 echo.
-echo Iniciando servidor y abriendo interfaz web...
-echo Carpeta de descargas: %~dp0downloads
+echo Iniciando servidor de desarrollo Vite...
 echo.
 
-start "" "http://127.0.0.1:8000"
-python -m uvicorn app:app --host 127.0.0.1 --port 8000
+start "" "http://localhost:5173"
+npm run dev
 
 pause

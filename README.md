@@ -1,44 +1,53 @@
-# 📥 RedGIFs Video Downloader Pro
+# 📥 RedGIFs Video Downloader Pro (Vite + React Web App)
 
-Herramienta completa para descargar videos de [RedGIFs](https://www.redgifs.com/) en máxima calidad (**HD 1080p/720p**) y versión móvil (**SD**), con soporte para audio, previsualización interactiva y descargas masivas por lotes.
+Aplicación web moderna creada con **React 18**, **TypeScript**, **Tailwind CSS** y **Vite**, optimizada para desplegarse instantáneamente en **[Bolt.new](https://bolt.new)**, **Vercel**, **Netlify** o de forma local.
 
----
-
-## 🚀 Opciones de Uso
-
-### 1. Interfaz Web Interactiva (Recomendada)
-Para abrir la interfaz visual en tu navegador:
-1. Haz doble clic en el archivo [**`start.bat`**](file:///c:/Users/Celia/Desktop/JLH/Buscador/start.bat).
-2. Se abrirá automáticamente tu navegador en **http://localhost:8000**.
-
-**Funcionalidades de la interfaz web:**
-- **📥 Descarga Individual**: Pega cualquier enlace de RedGIFs (ej: `https://www.redgifs.com/watch/...`), previsualiza el video en el reproductor integrado, consulta vistas y tags, y elige descargar en **HD** o **SD**.
-- **📑 Descarga Masiva por Lotes**: Pega decenas de enlaces (uno por línea) para descargarlos todos juntos con barra de progreso en tiempo real.
-- **🔍 Explorador de RedGIFs**: Busca videos directamente por temática o etiquetas y descárgalos con un solo clic.
-- **📁 Gestor de Descargas**: Mira los videos guardados en tu equipo, reprodúcelos o pulsa **"Abrir Carpeta en Windows"** para abrir el explorador de archivos directamente en la carpeta [`downloads/`](file:///c:/Users/Celia/Desktop/JLH/Buscador/downloads).
+Permite descargar videos de [RedGIFs](https://www.redgifs.com/) en máxima calidad (**HD 1080p/720p**) y versión móvil (**SD**), con audio completo, previsualización interactiva, barra de progreso en vivo y soporte para descargas por lotes.
 
 ---
 
-### 2. Uso desde Línea de Comandos (CLI / Terminal)
-Puedes usar el script [**`downloader.py`**](file:///c:/Users/Celia/Desktop/JLH/Buscador/downloader.py) directamente desde cualquier terminal de PowerShell o CMD:
+## ⚡ Despliegue en Bolt.new
 
+Este repositorio está preparado para importarse directamente en Bolt.new:
+1. En Bolt.new, selecciona **"Import from GitHub"**.
+2. Introduce el repositorio: `https://github.com/jlherrerovallenova/redgifs`
+3. Bolt detectará automáticamente el proyecto Vite/Node.js, ejecutará `npm install` y lanzará la aplicación web sin errores.
+
+---
+
+## 🚀 Ejecución Local
+
+### Opción 1: Con lanzador rápido (Windows)
+Haz doble clic en:
 ```bash
-# Descargar un video en HD
-python downloader.py https://www.redgifs.com/watch/ID_DEL_VIDEO
-
-# Descargar en calidad móvil (SD)
-python downloader.py https://www.redgifs.com/watch/ID_DEL_VIDEO -q sd
-
-# Descargar por lotes desde un archivo de texto con enlaces
-python downloader.py -f enlaces.txt
-
-# Buscar videos por palabra clave
-python downloader.py -s "dance"
+start.bat
 ```
 
+### Opción 2: Desde terminal (npm)
+```bash
+# 1. Instalar dependencias
+npm install
+
+# 2. Iniciar servidor de desarrollo
+npm run dev
+```
+Abre tu navegador en [http://localhost:5173](http://localhost:5173).
+
 ---
 
-## 📁 Ubicación de los Archivos Descargados
-Todos los videos descargados se almacenan automáticamente en la carpeta:
-📂 [**`downloads/`**](file:///c:/Users/Celia/Desktop/JLH/Buscador/downloads) con el formato:
-`nombreusuario_idvideo_calidad.mp4`.
+## ✨ Características Principales
+- **📥 Descarga Individual & Previsualización**: Pega cualquier enlace de RedGIFs (`https://www.redgifs.com/watch/...`) o su ID, previsualiza el video en el reproductor integrado, consulta vistas/tags y descarga en HD o SD.
+- **📊 Progreso de Descarga en Vivo**: Muestra porcentaje real (0% - 100%) y megabytes transferidos en tiempo real.
+- **📑 Descarga Masiva por Lotes**: Pega múltiples enlaces (uno por línea) para descargarlos todos consecutivamente.
+- **🔍 Explorador de RedGIFs**: Busca por palabras clave o categorías y descarga cualquier video con un solo clic.
+- **🕒 Historial de Sesión**: Guarda el historial de videos descargados para volver a reproducirlos o descargarlos cuando quieras.
+- **🐍 CLI de Python adicional**: Incluye `downloader.py` para quienes deseen descargar por línea de comandos.
+
+---
+
+## 🛠️ Tecnologías
+- **React 18** + **TypeScript**
+- **Vite 5**
+- **Tailwind CSS**
+- **Lucide React** (iconos)
+- **RedGIFs Public API v2** (CORS nativo en navegador)

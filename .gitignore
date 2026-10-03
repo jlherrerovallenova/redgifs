@@ -1,3 +1,9 @@
+# Node.js / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+
 # Python
 __pycache__/
 *.py[cod]
@@ -7,7 +13,7 @@ __pycache__/
 env/
 venv/
 
-# Downloaded media files (do not commit large video files)
+# Downloaded media files
 downloads/*.mp4
 downloads/*.webm
 downloads/*.mov
