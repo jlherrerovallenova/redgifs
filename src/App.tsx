@@ -14,9 +14,10 @@ import {
   CheckCircle, 
   AlertCircle, 
   ExternalLink,
-  Trash2
+  Trash2,
+  Share2
 } from 'lucide-react';
-import { getVideoInfo, searchVideos, downloadVideoFile } from './services/redgifs';
+import { getVideoInfo, searchVideos, downloadVideoFile, isIOS } from './services/redgifs';
 import { RedGifItem, SearchResultItem, HistoryItem } from './types';
 
 export default function App() {
@@ -401,7 +402,9 @@ export default function App() {
                         <div className="text-sm font-extrabold flex items-center justify-center gap-1.5">
                           <Download className="w-4 h-4" /> Descargar HD
                         </div>
-                        <div className="text-[10px] text-white/80 font-normal">Máxima calidad</div>
+                        <div className="text-[10px] text-white/80 font-normal">
+                          {isIOS() ? 'Guardar en Fotos / Archivos' : 'Máxima calidad (1080p)'}
+                        </div>
                       </button>
 
                       <button
@@ -414,6 +417,23 @@ export default function App() {
                         </div>
                         <div className="text-[10px] text-slate-400 font-normal">Versión móvil ligera</div>
                       </button>
+                    </div>
+
+                    {/* Direct link for iPad / iOS where browsers block blob downloads */}
+                    <div className="space-y-2 pt-1">
+                      <a
+                        href={video.hd_url || video.sd_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-red-400" />
+                        <span>Abrir enlace directo MP4 (Sin restricciones de navegador)</span>
+                      </a>
+
+                      <p className="text-[11px] text-slate-400 text-center">
+                        💡 <strong>En iPad / iPhone:</strong> Si Safari o Chrome dicen que no tienes permiso, pulsa <em>"Abrir enlace directo"</em>, mantén pulsado el video y elige <strong>"Guardar video"</strong> para enviarlo a tu galería de Fotos.
+                      </p>
                     </div>
                   </div>
                 </div>

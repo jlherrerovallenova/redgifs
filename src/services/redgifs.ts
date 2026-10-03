@@ -135,6 +135,22 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
 /**
  * Descarga el video en el navegador mediante Blob con reporte de progreso en vivo.
  */
+/**
+ * Detecta si el dispositivo es iOS / iPadOS.
+ */
+export function isIOS(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    ['iPad Simulator', 'iPhone Simulator', 'iPod Simulator', 'iPad', 'iPhone', 'iPod'].includes(navigator.platform) ||
+    (navigator.userAgent.includes('Mac') && 'ontouchend' in document) ||
+    /iPad|iPhone|iPod/.test(navigator.userAgent)
+  );
+}
+
+/**
+ * Descarga el video en el navegador mediante Blob con reporte de progreso en vivo,
+ * con soporte especial para iOS / iPadOS (Web Share API / Fotos).
+ */
 export async function downloadVideoFile(
   mediaUrl: string,
   filename: string,
@@ -150,9 +166,8 @@ export async function downloadVideoFile(
   const totalMb = totalBytes > 0 ? Math.round((totalBytes / (1024 * 1024)) * 10) / 10 : 0;
 
   if (!response.body) {
-    // Fallback standard blob
     const blob = await response.blob();
-    triggerBlobDownload(blob, filename);
+    await triggerBlobDownload(blob, filename, mediaUrl);
     return;
   }
 
@@ -176,16 +191,44 @@ export async function downloadVideoFile(
   }
 
   const blob = new Blob(chunks as any, { type: 'video/mp4' });
-  triggerBlobDownload(blob, filename);
+  await triggerBlobDownload(blob, filename, mediaUrl);
 }
 
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: string): Promise<void> {
+  // 1. Si es iOS / iPadOS y soporta Web Share API con archivos, guardar directamente en Fotos/Archivos
+  if (isIOS() && typeof navigator !== 'undefined' && 'canShare' in navigator) {
+    try {
+      const file = new File([blob], filename, { type: 'video/mp4' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: filename,
+        });
+        return;
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return; // El usuario canceló la hoja de compartir
+      }
+      console.warn('Web Share no disponible o falló:', err);
+    }
+  }
+
+  // 2. Método estándar para PC / Android (enlace <a> con atributo download)
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    // 3. Fallback de seguridad: abrir URL directa en nueva pestaña si Safari bloquea blobs
+    if (originalUrl) {
+      window.open(originalUrl, '_blank');
+    }
+  }
 }
