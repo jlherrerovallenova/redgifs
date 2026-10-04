@@ -60,224 +60,257 @@ export async function mergeVideoBlobs(
 
   const { mimeType, extension } = getSupportedMimeType();
 
-  // 1. Obtener dimensiones óptimas de los videos
-  let targetWidth = 720;
-  let targetHeight = 1280; // Default vertical / standard
-
-  const tempVideo = document.createElement('video');
-  tempVideo.preload = 'metadata';
-  tempVideo.muted = true;
-  tempVideo.playsInline = true;
-
-  const firstUrl = URL.createObjectURL(blobs[0]);
-  await new Promise<void>((resolve) => {
-    tempVideo.onloadedmetadata = () => {
-      if (tempVideo.videoWidth && tempVideo.videoHeight) {
-        targetWidth = tempVideo.videoWidth;
-        targetHeight = tempVideo.videoHeight;
-      }
-      resolve();
-    };
-    tempVideo.onerror = () => resolve();
-    tempVideo.src = firstUrl;
-  });
-  URL.revokeObjectURL(firstUrl);
-
-  // Asegurar dimensiones pares
-  targetWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth + 1;
-  targetHeight = targetHeight % 2 === 0 ? targetHeight : targetHeight + 1;
-
-  // 2. Preparar Canvas y AudioContext
-  const canvas = previewCanvas || document.createElement('canvas');
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
-  const ctx = canvas.getContext('2d', { alpha: false });
-  if (!ctx) throw new Error('No se pudo inicializar el contexto 2D del Canvas');
-
-  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-  let audioCtx: AudioContext | null = null;
-  let audioDest: MediaStreamAudioDestinationNode | null = null;
+  // Contenedor temporal oculto en el DOM para que Safari/WebKit active el pipeline de vídeo
+  const container = document.createElement('div');
+  container.setAttribute('aria-hidden', 'true');
+  container.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-9999;';
+  document.body.appendChild(container);
 
   try {
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-      }
-      audioDest = audioCtx.createMediaStreamDestination();
-    }
-  } catch (e) {
-    console.warn('AudioContext no disponible, se grabará sin audio:', e);
-  }
+    // 1. Obtener dimensiones óptimas del primer video con timeout seguro
+    let targetWidth = 720;
+    let targetHeight = 1280;
 
-  // 3. Capturar stream del canvas y combinar con audio
-  const fps = 30;
-  let canvasStream: MediaStream;
-  try {
-    canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(fps) : (canvas as any).mozCaptureStream(fps);
-  } catch {
-    canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream() : (canvas as any).mozCaptureStream();
-  }
+    const tempVideo = document.createElement('video');
+    tempVideo.preload = 'auto';
+    tempVideo.muted = true;
+    tempVideo.defaultMuted = true;
+    tempVideo.playsInline = true;
+    tempVideo.setAttribute('playsinline', '');
+    tempVideo.setAttribute('webkit-playsinline', '');
+    tempVideo.setAttribute('muted', '');
+    container.appendChild(tempVideo);
 
-  const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
-
-  if (audioDest && audioDest.stream.getAudioTracks().length > 0) {
-    tracks.push(...audioDest.stream.getAudioTracks());
-  }
-
-  const combinedStream = new MediaStream(tracks);
-
-  // 4. Inicializar MediaRecorder de forma segura para Safari / Chrome / Firefox
-  const recordedChunks: Blob[] = [];
-  let recorder: MediaRecorder;
-  const recorderOptions: MediaRecorderOptions = {};
-  if (mimeType) {
-    recorderOptions.mimeType = mimeType;
-  }
-
-  try {
-    recorder = new MediaRecorder(combinedStream, recorderOptions);
-  } catch {
-    // Si falla con opciones en Safari, inicializar con el contenedor predeterminado del sistema
-    recorder = new MediaRecorder(combinedStream);
-  }
-
-  recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) {
-      recordedChunks.push(e.data);
-    }
-  };
-
-  recorder.start(250); // Recolectar trozos cada 250ms
-
-  // 5. Reproducir y dibujar cada video secuencialmente
-  const playVideo = document.createElement('video');
-  playVideo.playsInline = true;
-  playVideo.muted = false; // El audio va al AudioContext // El audio va al AudioContext
-
-  let audioSourceNode: MediaElementAudioSourceNode | null = null;
-  if (audioCtx && audioDest) {
-    try {
-      audioSourceNode = audioCtx.createMediaElementSource(playVideo);
-      audioSourceNode.connect(audioDest);
-      // No conectar a audioCtx.destination para no aturdir al usuario durante la mezcla
-    } catch (e) {
-      console.warn('Error al conectar audio de video:', e);
-    }
-  }
-
-/**
- * Reproduce y dibuja un blob de video en el canvas para la grabación.
- */
-async function playVideoChunk(
-  blob: Blob,
-  playVideo: HTMLVideoElement,
-  ctx: CanvasRenderingContext2D,
-  targetWidth: number,
-  targetHeight: number
-): Promise<void> {
-  const url = URL.createObjectURL(blob);
-  try {
+    const firstUrl = URL.createObjectURL(blobs[0]);
     await new Promise<void>((resolve) => {
-      let animFrameId: number;
-
-      const drawLoop = () => {
-        if (!playVideo.paused && !playVideo.ended) {
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-          const vw = playVideo.videoWidth || targetWidth;
-          const vh = playVideo.videoHeight || targetHeight;
-          const hRatio = targetWidth / vw;
-          const vRatio = targetHeight / vh;
-          const ratio = Math.min(hRatio, vRatio);
-          const centerShiftX = (targetWidth - vw * ratio) / 2;
-          const centerShiftY = (targetHeight - vh * ratio) / 2;
-
-          ctx.drawImage(
-            playVideo,
-            0,
-            0,
-            vw,
-            vh,
-            centerShiftX,
-            centerShiftY,
-            vw * ratio,
-            vh * ratio
-          );
-
-          animFrameId = requestAnimationFrame(drawLoop);
-        }
-      };
-
-      playVideo.onloadeddata = async () => {
-        try {
-          await playVideo.play();
-          drawLoop();
-        } catch {
-          playVideo.muted = true;
-          try {
-            await playVideo.play();
-            drawLoop();
-          } catch {
-            resolve();
+      let resolved = false;
+      const finish = () => {
+        if (!resolved) {
+          resolved = true;
+          if (tempVideo.videoWidth && tempVideo.videoHeight) {
+            targetWidth = tempVideo.videoWidth;
+            targetHeight = tempVideo.videoHeight;
           }
+          resolve();
         }
       };
-
-      playVideo.onended = () => {
-        cancelAnimationFrame(animFrameId);
-        resolve();
+      const timer = setTimeout(finish, 3000);
+      tempVideo.onloadedmetadata = () => {
+        clearTimeout(timer);
+        finish();
       };
-
-      playVideo.onerror = () => {
-        cancelAnimationFrame(animFrameId);
-        resolve();
+      tempVideo.onerror = () => {
+        clearTimeout(timer);
+        finish();
       };
-
-      playVideo.src = url;
+      tempVideo.src = firstUrl;
+      try { tempVideo.load(); } catch {}
     });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
+    URL.revokeObjectURL(firstUrl);
+    try { container.removeChild(tempVideo); } catch {}
 
-  const playSequentially = async (index: number): Promise<void> => {
-    if (index >= blobs.length) return;
-    await playVideoChunk(blobs[index], playVideo, ctx, targetWidth, targetHeight);
-    return playSequentially(index + 1);
-  };
+    // Asegurar dimensiones pares
+    targetWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth + 1;
+    targetHeight = targetHeight % 2 === 0 ? targetHeight : targetHeight + 1;
 
-  await playSequentially(0);
+    // 2. Preparar Canvas
+    const canvas = previewCanvas || document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('No se pudo inicializar el contexto 2D del Canvas');
 
-  // 6. Finalizar grabación
-  await new Promise<void>((resolve) => {
-    recorder.onstop = () => resolve();
-    // Dar medio segundo final para asegurar el último cuadro
-    setTimeout(() => {
-      try {
-        recorder.stop();
-      } catch {
-        resolve();
+    // 3. Capturar stream del canvas
+    const fps = 30;
+    let canvasStream: MediaStream | null = null;
+    const getStream = (c: HTMLCanvasElement): MediaStream | null => {
+      if (typeof (c as any).captureStream === 'function') {
+        try { return (c as any).captureStream(fps); } catch {}
+        try { return (c as any).captureStream(); } catch {}
       }
-    }, 400);
-  });
+      if (typeof (c as any).mozCaptureStream === 'function') {
+        try { return (c as any).mozCaptureStream(fps); } catch {}
+        try { return (c as any).mozCaptureStream(); } catch {}
+      }
+      return null;
+    };
 
-  if (audioCtx) {
+    canvasStream = getStream(canvas);
+    if (!canvasStream) {
+      throw new Error('Tu navegador no soporta la grabación de Canvas en tiempo real (captureStream).');
+    }
+
+    const videoTracks = canvasStream.getVideoTracks();
+    if (videoTracks.length === 0) {
+      throw new Error('No se pudo obtener la pista de video del Canvas.');
+    }
+
+    // 4. Inicializar MediaRecorder
+    const recordedChunks: Blob[] = [];
+    let recorder: MediaRecorder;
+    const recorderOptions: MediaRecorderOptions = {};
+    if (mimeType) {
+      recorderOptions.mimeType = mimeType;
+    }
+
     try {
-      await audioCtx.close();
+      recorder = new MediaRecorder(canvasStream, recorderOptions);
+    } catch {
+      recorder = new MediaRecorder(canvasStream);
+    }
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        recordedChunks.push(e.data);
+      }
+    };
+
+    recorder.start(250);
+
+    // 5. Preparar elemento de reproducción dentro del DOM para soporte en Safari iOS
+    const playVideo = document.createElement('video');
+    playVideo.muted = true;
+    playVideo.defaultMuted = true;
+    playVideo.playsInline = true;
+    playVideo.setAttribute('playsinline', '');
+    playVideo.setAttribute('webkit-playsinline', '');
+    playVideo.setAttribute('muted', '');
+    playVideo.preload = 'auto';
+    container.appendChild(playVideo);
+
+    const playVideoChunk = async (
+      blob: Blob,
+      index: number
+    ): Promise<void> => {
+      const url = URL.createObjectURL(blob);
+      try {
+        await new Promise<void>((resolve) => {
+          let animFrameId: number;
+          let resolved = false;
+          let safetyTimeout: any = null;
+
+          const finish = () => {
+            if (!resolved) {
+              resolved = true;
+              if (safetyTimeout) clearTimeout(safetyTimeout);
+              cancelAnimationFrame(animFrameId);
+              resolve();
+            }
+          };
+
+          const drawLoop = () => {
+            if (resolved) return;
+            if (!playVideo.paused && !playVideo.ended) {
+              ctx.fillStyle = '#000000';
+              ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+              const vw = playVideo.videoWidth || targetWidth;
+              const vh = playVideo.videoHeight || targetHeight;
+              const ratio = Math.min(targetWidth / vw, targetHeight / vh);
+              const centerShiftX = (targetWidth - vw * ratio) / 2;
+              const centerShiftY = (targetHeight - vh * ratio) / 2;
+
+              ctx.drawImage(
+                playVideo,
+                0,
+                0,
+                vw,
+                vh,
+                centerShiftX,
+                centerShiftY,
+                vw * ratio,
+                vh * ratio
+              );
+
+              if (playVideo.duration > 0 && onProgress) {
+                const chunkProgress = Math.min(1, playVideo.currentTime / playVideo.duration);
+                const overallPercent = Math.min(99, Math.round(((index + chunkProgress) / blobs.length) * 100));
+                onProgress({
+                  currentVideo: index + 1,
+                  totalVideos: blobs.length,
+                  percent: overallPercent,
+                  statusText: `Uniendo video ${index + 1} de ${blobs.length} (${overallPercent}%)...`
+                });
+              }
+            }
+            animFrameId = requestAnimationFrame(drawLoop);
+          };
+
+          playVideo.onloadedmetadata = () => {
+            const durationSec = playVideo.duration && isFinite(playVideo.duration) ? playVideo.duration : 20;
+            safetyTimeout = setTimeout(finish, (durationSec + 4) * 1000);
+          };
+
+          playVideo.onloadeddata = async () => {
+            try {
+              await playVideo.play();
+              animFrameId = requestAnimationFrame(drawLoop);
+            } catch {
+              playVideo.muted = true;
+              try {
+                await playVideo.play();
+                animFrameId = requestAnimationFrame(drawLoop);
+              } catch {
+                finish();
+              }
+            }
+          };
+
+          playVideo.onended = finish;
+          playVideo.onerror = finish;
+
+          playVideo.src = url;
+          try { playVideo.load(); } catch {}
+        });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    // Reproducir secuencialmente cada video
+    for (let i = 0; i < blobs.length; i++) {
+      if (onProgress) {
+        const startPercent = Math.round((i / blobs.length) * 100);
+        onProgress({
+          currentVideo: i + 1,
+          totalVideos: blobs.length,
+          percent: startPercent,
+          statusText: `Iniciando video ${i + 1} de ${blobs.length}...`
+        });
+      }
+      await playVideoChunk(blobs[i], i);
+    }
+
+    // 6. Finalizar grabación
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+      setTimeout(() => {
+        try {
+          recorder.stop();
+        } catch {
+          resolve();
+        }
+      }, 400);
+    });
+
+    if (onProgress) {
+      onProgress({
+        currentVideo: blobs.length,
+        totalVideos: blobs.length,
+        percent: 100,
+        statusText: '¡Compilación completada!'
+      });
+    }
+
+    const finalBlob = new Blob(recordedChunks, { type: mimeType || 'video/mp4' });
+    return { blob: finalBlob, extension };
+
+  } finally {
+    // Limpiar contenedor del DOM siempre
+    try {
+      if (container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
     } catch {}
   }
-
-  if (onProgress) {
-    onProgress({
-      currentVideo: blobs.length,
-      totalVideos: blobs.length,
-      percent: 100,
-      statusText: '¡Compilación completada!'
-    });
-  }
-
-  const finalBlob = new Blob(recordedChunks, { type: mimeType });
-  return { blob: finalBlob, extension };
 }
