@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/redgifs/(.*)",
+      "destination": "/api/redgifs?path=$1"
+    }
+  ]
+}
