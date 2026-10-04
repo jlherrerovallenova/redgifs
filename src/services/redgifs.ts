@@ -190,10 +190,17 @@ export async function getVideoInfo(urlOrId: string): Promise<RedGifItem> {
   };
 }
 
+export interface SearchQueryResult {
+  items: SearchResultItem[];
+  page: number;
+  pages: number;
+  total: number;
+}
+
 /**
- * Busca videos en RedGIFs por palabra clave o tag.
+ * Búsqueda avanzada en RedGIFs con soporte de paginación y metadatos completos (audio, likes, tags).
  */
-export async function searchVideos(query: string, count = 20, page = 1): Promise<SearchResultItem[]> {
+export async function searchVideosExtended(query: string, count = 24, page = 1): Promise<SearchQueryResult> {
   const token = await getAuthToken();
   const params = new URLSearchParams({
     search_text: query,
@@ -208,8 +215,7 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
   });
 
   const gifs = data.gifs || [];
-
-  return gifs.map((g: any) => {
+  const items: SearchResultItem[] = gifs.map((g: any) => {
     const urls = g.urls || {};
     return {
       id: g.id,
@@ -217,12 +223,33 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
       userName: g.userName || 'anónimo',
       duration: Math.round((Number(g.duration) || 0) * 10) / 10,
       views: Number(g.views) || 0,
-      hd_url: urls.hd || '',
-      sd_url: urls.sd || '',
+      likes: Number(g.likes) || 0,
+      hasAudio: Boolean(g.hasAudio),
+      verified: Boolean(g.verified),
+      tags: Array.isArray(g.tags) ? g.tags : [],
+      hd_url: urls.hd || urls.sd || '',
+      sd_url: urls.sd || urls.hd || '',
+      silent_url: urls.silent || urls.sd || '',
       thumbnail_url: urls.thumbnail || urls.poster || '',
+      poster_url: urls.poster || urls.thumbnail || '',
       watch_url: `https://www.redgifs.com/watch/${g.id}`
     };
   });
+
+  return {
+    items,
+    page: Number(data.page) || page,
+    pages: Number(data.pages) || 1,
+    total: Number(data.total) || items.length
+  };
+}
+
+/**
+ * Busca videos en RedGIFs por palabra clave o tag (compatibilidad).
+ */
+export async function searchVideos(query: string, count = 20, page = 1): Promise<SearchResultItem[]> {
+  const res = await searchVideosExtended(query, count, page);
+  return res.items;
 }
 
 /**

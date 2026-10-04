@@ -30,6 +30,8 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   };
 
+  const [prefilledBatchUrls, setPrefilledBatchUrls] = useState<string>('');
+
   const handleSuccessDownload = (video: RedGifItem, quality: string, filename: string, size_mb?: number) => {
     const newItem: HistoryItem = {
       id: video.id,
@@ -78,6 +80,7 @@ export default function App() {
           <BatchDownloader
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
+            initialUrls={prefilledBatchUrls}
           />
         )}
 
@@ -86,6 +89,11 @@ export default function App() {
             onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
+            onSendToBatch={(urls) => {
+              setPrefilledBatchUrls(urls.join('\n'));
+              setActiveTab('batch');
+              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+            }}
           />
         )}
 

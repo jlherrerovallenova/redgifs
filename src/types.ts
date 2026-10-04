@@ -19,9 +19,15 @@ export interface SearchResultItem {
   userName: string;
   duration: number;
   views: number;
+  likes?: number;
+  hasAudio?: boolean;
+  verified?: boolean;
+  tags?: string[];
   hd_url: string;
   sd_url: string;
+  silent_url?: string;
   thumbnail_url: string;
+  poster_url?: string;
   watch_url: string;
 }
 

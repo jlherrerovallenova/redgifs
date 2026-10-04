@@ -8,6 +8,7 @@ import { BatchItemList, BatchItemStatus } from './BatchItemList';
 interface BatchDownloaderProps {
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string, size_mb?: number) => void;
   showToast: (msg: string) => void;
+  initialUrls?: string;
 }
 
 interface MergedResult {
@@ -18,9 +19,15 @@ interface MergedResult {
   videoCount: number;
 }
 
-export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownload, showToast }) => {
-  const [batchText, setBatchText] = useState('');
+export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownload, showToast, initialUrls }) => {
+  const [batchText, setBatchText] = useState(initialUrls || '');
   const [batchQuality, setBatchQuality] = useState<'hd' | 'sd'>('hd');
+
+  React.useEffect(() => {
+    if (initialUrls) {
+      setBatchText(initialUrls);
+    }
+  }, [initialUrls]);
   const [downloadMode, setDownloadMode] = useState<'individual' | 'merge'>('individual');
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [batchItems, setBatchItems] = useState<BatchItemStatus[]>([]);
