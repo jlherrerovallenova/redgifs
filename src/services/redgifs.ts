@@ -253,9 +253,36 @@ export async function fetchVideoBlob(
   mediaUrl: string,
   onProgress?: (progressPercent: number, downloadedMb: number, totalMb: number) => void
 ): Promise<Blob> {
-  const response = await fetch(mediaUrl);
-  if (!response.ok) {
-    throw new Error(`Fallo al descargar archivo: HTTP ${response.status}`);
+  let response: Response | null = null;
+
+  // 1. Intento directo con no-referrer (RedGIFs devuelve 200 cuando no se envía Referer de red local)
+  try {
+    const res = await fetch(mediaUrl, { referrerPolicy: 'no-referrer' });
+    if (res.ok) {
+      response = res;
+    } else {
+      console.warn(`[RedGIFs Media] fetch directo HTTP ${res.status}, probando proxy local...`);
+    }
+  } catch (err) {
+    console.warn(`[RedGIFs Media] fetch directo falló, probando proxy local...`, err);
+  }
+
+  // 2. Si falla (p. ej. HTTP 403 o CORS en Safari), intentar a través del proxy local de Vite
+  if (!response) {
+    try {
+      const urlObj = new URL(mediaUrl);
+      const proxiedUrl = `/media-proxy${urlObj.pathname}${urlObj.search}`;
+      const res = await fetch(proxiedUrl);
+      if (res.ok) {
+        response = res;
+      }
+    } catch (proxyErr) {
+      console.warn(`[RedGIFs Media] proxy local falló`, proxyErr);
+    }
+  }
+
+  if (!response || !response.ok) {
+    throw new Error(`Fallo al descargar archivo: HTTP ${response?.status || 403}`);
   }
 
   const contentLength = response.headers.get('content-length');

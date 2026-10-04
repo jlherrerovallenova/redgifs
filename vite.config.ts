@@ -19,6 +19,23 @@ const proxyConfig = {
         proxyRes.headers['access-control-allow-headers'] = '*';
       });
     }
+  },
+  '/media-proxy': {
+    target: 'https://media.redgifs.com',
+    changeOrigin: true,
+    secure: false,
+    rewrite: (path: string) => path.replace(/^\/media-proxy/, ''),
+    headers: {
+      'Referer': 'https://www.redgifs.com/',
+      'Origin': 'https://www.redgifs.com'
+    },
+    configure: (proxy: any) => {
+      proxy.on('proxyRes', (proxyRes: any) => {
+        proxyRes.headers['access-control-allow-origin'] = '*';
+        proxyRes.headers['access-control-allow-methods'] = 'GET, HEAD, OPTIONS';
+        proxyRes.headers['access-control-allow-headers'] = '*';
+      });
+    }
   }
 };
 
