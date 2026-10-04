@@ -25,6 +25,7 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T
 
     // Si la respuesta no es JSON (p. ej. si un router SPA devuelve index.html), descartar inmediatamente
     if (!contentType.includes('json')) {
+      console.warn(`[RedGIFs] ${url} → content-type no JSON: "${contentType}"`);
       return null;
     }
 
@@ -33,23 +34,23 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T
     }
 
     if (!res.ok) {
+      console.warn(`[RedGIFs] ${url} → HTTP ${res.status}`);
       throw new Error(`Error en servidor RedGIFs: HTTP ${res.status}`);
     }
 
     const text = await res.text();
 
-    // Guardar JSON.parse en su propio try-catch: Safari lanza
-    // "The string did not match the expected pattern" en vez del
-    // "Unexpected token" estándar, y puede no ser capturado correctamente.
     try {
       return JSON.parse(text) as T;
     } catch {
+      console.warn(`[RedGIFs] ${url} → JSON.parse falló`);
       return null;
     }
   } catch (err: any) {
     if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
       throw err;
     }
+    console.warn(`[RedGIFs] ${url} → Error: ${err?.message ?? err}`);
     return null;
   }
 }
@@ -86,16 +87,16 @@ async function tryAllOriginsProxy<T>(path: string, options: RequestInit): Promis
 }
 
 async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  // 1. Directo con la API pública de RedGIFs (funciona cuando CORS permite el origen)
-  const directData = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
-  if (directData !== null) {
-    return directData;
-  }
-
-  // 2. Proxy de desarrollo de Vite (/api/redgifs) — activo con `npm run dev`
+  // 1. Proxy local de Vite (/api/redgifs) — resuelve CORS y cabeceras Referer/Origin automáticamente
   const proxyData = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
   if (proxyData !== null) {
     return proxyData;
+  }
+
+  // 2. Directo con la API pública de RedGIFs (si se corre fuera del entorno Vite o con CORS permitido)
+  const directData = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
+  if (directData !== null) {
+    return directData;
   }
 
   // 3. Proxy CORS gratuito allorigins.win (solo para rutas sin Authorization)

@@ -9,7 +9,6 @@ echo.
 echo Iniciando servidor de desarrollo Vite...
 echo.
 
-start "" "http://localhost:3000"
-npm run dev
+npm run dev -- --open
 
 pause
