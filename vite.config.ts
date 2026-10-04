@@ -13,11 +13,10 @@ const proxyConfig = {
     },
     configure: (proxy: any) => {
       proxy.on('proxyRes', (proxyRes: any) => {
-        // Eliminar cabeceras CORS devueltas por RedGIFs para evitar conflictos de origen en el navegador
-        delete proxyRes.headers['access-control-allow-origin'];
-        delete proxyRes.headers['access-control-allow-credentials'];
-        delete proxyRes.headers['access-control-allow-methods'];
-        delete proxyRes.headers['access-control-allow-headers'];
+        // Permitir explícitamente en Safari / iPadOS para evitar bloqueos de preflight
+        proxyRes.headers['access-control-allow-origin'] = '*';
+        proxyRes.headers['access-control-allow-methods'] = 'GET, POST, OPTIONS, HEAD';
+        proxyRes.headers['access-control-allow-headers'] = '*';
       });
     }
   }
@@ -28,12 +27,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: true,
+    host: '0.0.0.0',
+    cors: true,
     proxy: proxyConfig
   },
   preview: {
     port: 3000,
-    host: true,
+    host: '0.0.0.0',
+    cors: true,
     proxy: proxyConfig
   }
 });
