@@ -1,13 +1,21 @@
 import React, { useState, useRef } from 'react';
-import { Download, Film, Sparkles } from 'lucide-react';
+import { Download, Film, Sparkles, CheckCircle2, FolderDown } from 'lucide-react';
 import { RedGifItem } from '../types';
-import { getVideoInfo, fetchVideoBlob, downloadVideoFile, triggerBlobDownload } from '../services/redgifs';
+import { getVideoInfo, fetchVideoBlob, downloadVideoFile, saveVideoWithPicker } from '../services/redgifs';
 import { mergeVideoBlobs, MergeProgress } from '../services/videoMerger';
 import { BatchItemList, BatchItemStatus } from './BatchItemList';
 
 interface BatchDownloaderProps {
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string, size_mb?: number) => void;
   showToast: (msg: string) => void;
+}
+
+interface MergedResult {
+  blob: Blob;
+  blobUrl: string;
+  filename: string;
+  sizeMb: number;
+  videoCount: number;
 }
 
 export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownload, showToast }) => {
@@ -17,10 +25,11 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [batchItems, setBatchItems] = useState<BatchItemStatus[]>([]);
   
-  // Merge status
+  // Merge status & result
   const [mergeStage, setMergeStage] = useState<'idle' | 'downloading' | 'merging' | 'done'>('idle');
   const [mergeStatusText, setMergeStatusText] = useState('');
   const [mergePercent, setMergePercent] = useState(0);
+  const [mergedResult, setMergedResult] = useState<MergedResult | null>(null);
 
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -30,6 +39,11 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
       showToast('Pega al menos un enlace en el área de texto');
       return;
     }
+
+    if (mergedResult?.blobUrl) {
+      URL.revokeObjectURL(mergedResult.blobUrl);
+    }
+    setMergedResult(null);
 
     const items: BatchItemStatus[] = urls.map((u, i) => ({
       id: `${i}-${encodeURIComponent(u)}`,
@@ -132,9 +146,17 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
         );
 
         const filename = `redgifs_compilacion_${Date.now()}.${extension}`;
-        await triggerBlobDownload(mergedBlob, filename);
-
+        const blobUrl = URL.createObjectURL(mergedBlob);
         const sizeMb = Math.round((mergedBlob.size / (1024 * 1024)) * 10) / 10;
+
+        setMergedResult({
+          blob: mergedBlob,
+          blobUrl,
+          filename,
+          sizeMb,
+          videoCount: downloadedBlobs.length
+        });
+
         const compInfo: RedGifItem = {
           id: `comp_${Date.now()}`,
           title: `Compilación de ${downloadedBlobs.length} videos`,
@@ -143,8 +165,8 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
           views: 0,
           likes: 0,
           tags: ['compilacion', 'lote'],
-          hd_url: '',
-          sd_url: '',
+          hd_url: blobUrl,
+          sd_url: blobUrl,
           poster_url: collectedInfos[0]?.poster_url || '',
           thumbnail_url: collectedInfos[0]?.thumbnail_url || '',
           watch_url: '#'
@@ -152,8 +174,8 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
 
         onSuccessDownload(compInfo, 'compilacion', filename, sizeMb);
         setMergeStage('done');
-        setMergeStatusText(`¡Video unido y descargado con éxito! (${sizeMb} MB)`);
-        showToast(`¡Video compilado descargado!: ${filename}`);
+        setMergeStatusText(`¡Video compilado con éxito! (${sizeMb} MB)`);
+        showToast(`¡Video listo! Puedes reproducirlo y guardarlo abajo.`);
       } catch (err: any) {
         setMergeStage('idle');
         setMergeStatusText(`Error al unir videos: ${err.message}`);
@@ -246,6 +268,10 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
           <button
             type="button"
             onClick={() => {
+              if (mergedResult?.blobUrl) {
+                URL.revokeObjectURL(mergedResult.blobUrl);
+              }
+              setMergedResult(null);
               setBatchText('');
               setBatchItems([]);
               setMergeStage('idle');
@@ -258,12 +284,12 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
             type="button"
             onClick={handleStartBatch}
             disabled={isBatchRunning}
-            className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-red-500/30 transition-transform duration-150 active:scale-95 disabled:opacity-50 flex items-center gap-2"
+            className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-red-500/30 transition-transform duration-150 active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
           >
             {downloadMode === 'merge' ? (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>{isBatchRunning ? 'Uniendo videos...' : 'Unir y Descargar Video'}</span>
+                <span>{isBatchRunning ? 'Uniendo videos...' : 'Unir Videos'}</span>
               </>
             ) : (
               <>
@@ -292,6 +318,71 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
           </div>
           {/* Canvas oculto para el procesador de video */}
           <canvas ref={previewCanvasRef} className="hidden" />
+        </div>
+      )}
+
+      {/* Tarjeta Destacada de Video Compilado Listo con Botón de Descarga / Guardar */}
+      {mergedResult && (
+        <div className="bg-gradient-to-b from-[#161a26] to-[#0f121a] border-2 border-emerald-500/60 p-5 sm:p-6 rounded-3xl space-y-4 shadow-2xl shadow-emerald-500/10 animate-fadeIn">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 text-emerald-400 font-bold">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+              <span className="text-base sm:text-lg">¡Video Unido con Éxito!</span>
+            </div>
+            <span className="text-xs bg-emerald-500/20 text-emerald-300 font-semibold px-3 py-1 rounded-full border border-emerald-500/30">
+              {mergedResult.sizeMb} MB • {mergedResult.videoCount} videos
+            </span>
+          </div>
+
+          {/* Reproductor de Vista Previa para verificar que está unido */}
+          <div className="relative rounded-2xl overflow-hidden bg-black border border-white/10 aspect-video max-h-80 flex items-center justify-center">
+            <video
+              src={mergedResult.blobUrl}
+              controls
+              playsInline
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="text-xs font-mono text-slate-400 truncate">
+              Archivo: <span className="text-slate-200">{mergedResult.filename}</span>
+            </div>
+
+            {/* Botones de Guardar / Descargar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await saveVideoWithPicker(mergedResult.blob, mergedResult.filename);
+                    showToast('Abriendo gestor de guardado...');
+                  } catch (e: any) {
+                    showToast(`Error al guardar: ${e.message}`);
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold px-5 py-3.5 rounded-2xl text-sm sm:text-base shadow-lg shadow-emerald-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2.5 cursor-pointer"
+              >
+                <FolderDown className="w-5 h-5 text-slate-950 shrink-0" />
+                <span>Guardar / Elegir Carpeta</span>
+              </button>
+
+              <a
+                href={mergedResult.blobUrl}
+                download={mergedResult.filename}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-white/10 hover:bg-white/15 text-white font-bold px-5 py-3.5 rounded-2xl text-sm sm:text-base border border-white/10 transition-colors flex items-center justify-center gap-2.5 cursor-pointer"
+              >
+                <Download className="w-5 h-5 text-emerald-400 shrink-0" />
+                <span>Descarga Directa</span>
+              </a>
+            </div>
+
+            <p className="text-xs text-slate-400 text-center">
+              📱 En iPad: pulsa <b>"Guardar / Elegir Carpeta"</b> para elegir <i>"Guardar en Archivos"</i> (y elegir carpeta de iCloud o del iPad) o <i>"Guardar video en Fotos"</i>.
+            </p>
+          </div>
         </div>
       )}
 

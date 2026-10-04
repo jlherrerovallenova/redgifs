@@ -366,8 +366,8 @@ export async function downloadVideoFile(
   await triggerBlobDownload(blob, filename, mediaUrl);
 }
 
-export async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: string): Promise<void> {
-  // 1. Si es iOS / iPadOS y soporta Web Share API con archivos, guardar directamente en Fotos/Archivos
+export async function saveVideoWithPicker(blob: Blob, filename: string): Promise<void> {
+  // 1. En iOS / iPadOS: Web Share API permite al usuario elegir "Guardar en Archivos" o "Guardar video"
   if (isIOS() && typeof navigator !== 'undefined' && 'canShare' in navigator) {
     try {
       const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
@@ -379,14 +379,36 @@ export async function triggerBlobDownload(blob: Blob, filename: string, original
         return;
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        return; // El usuario canceló la hoja de compartir
-      }
+      if (err.name === 'AbortError') return; // Cancelado por el usuario
       console.warn('Web Share no disponible o falló:', err);
     }
   }
 
-  // 2. Método estándar para PC / Android (enlace <a> con atributo download)
+  // 2. En PC (Chrome / Edge): File System Access API para abrir el diálogo "Guardar como..." y elegir carpeta
+  if (typeof (window as any).showSaveFilePicker === 'function') {
+    try {
+      const handle = await (window as any).showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: 'Video MP4',
+          accept: { 'video/mp4': ['.mp4'] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      console.warn('showSaveFilePicker falló, fallback a descarga directa', err);
+    }
+  }
+
+  // 3. Fallback estándar para el resto de navegadores
+  await triggerBlobDownload(blob, filename);
+}
+
+export async function triggerBlobDownload(blob: Blob, filename: string, originalUrl?: string): Promise<void> {
   try {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -396,11 +418,11 @@ export async function triggerBlobDownload(blob: Blob, filename: string, original
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   } catch (e) {
-    // 3. Fallback de seguridad: abrir URL directa en nueva pestaña si Safari bloquea blobs
     if (originalUrl) {
       window.open(originalUrl, '_blank', 'noopener,noreferrer');
     }
   }
 }
+
