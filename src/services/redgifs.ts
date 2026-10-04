@@ -3,13 +3,24 @@ import { RedGifItem, SearchResultItem } from '../types';
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
+/** Hace fetch con un timeout en ms (por defecto 12 s). */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 12000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Consulta un endpoint de RedGIFs asegurando que la respuesta sea JSON legítimo
  * y evitando excepciones de parsing HTML en Safari / iOS.
  */
 async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(url, options);
+    const res = await fetchWithTimeout(url, options);
     const contentType = res.headers.get('content-type') || '';
 
     // Si la respuesta no es JSON (p. ej. si un router SPA devuelve index.html), descartar inmediatamente
@@ -26,7 +37,46 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T
     }
 
     const text = await res.text();
-    return JSON.parse(text) as T;
+
+    // Guardar JSON.parse en su propio try-catch: Safari lanza
+    // "The string did not match the expected pattern" en vez del
+    // "Unexpected token" estándar, y puede no ser capturado correctamente.
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return null;
+    }
+  } catch (err: any) {
+    if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
+      throw err;
+    }
+    return null;
+  }
+}
+
+/**
+ * Intenta obtener JSON desde allorigins.win, que envuelve la respuesta
+ * en { contents: "...", status: { http_code: 200 } }.
+ */
+async function tryAllOriginsProxy<T>(path: string, options: RequestInit): Promise<T | null> {
+  const targetUrl = `https://api.redgifs.com/v2${path}`;
+  // allorigins no permite enviar cabeceras personalizadas; solo sirve para el token inicial
+  // y endpoints que no requieran Authorization.
+  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+  try {
+    const res = await fetchWithTimeout(proxyUrl, {}, 15000);
+    if (!res.ok) return null;
+    const wrapper = await res.json() as { contents?: string; status?: { http_code: number } };
+    const httpCode = wrapper?.status?.http_code ?? 0;
+    if (httpCode === 404 || httpCode === 410) {
+      throw new Error('El video solicitado no existe o ha sido eliminado.');
+    }
+    if (!wrapper?.contents) return null;
+    try {
+      return JSON.parse(wrapper.contents) as T;
+    } catch {
+      return null;
+    }
   } catch (err: any) {
     if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
       throw err;
@@ -36,25 +86,25 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T
 }
 
 async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  // 1. Probar directo con la API pública de RedGIFs (compatible nativamente con CORS)
+  // 1. Directo con la API pública de RedGIFs (funciona cuando CORS permite el origen)
   const directData = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
   if (directData !== null) {
     return directData;
   }
 
-  // 2. Probar mediante el proxy de desarrollo de Vite (/api/redgifs) si está activo
+  // 2. Proxy de desarrollo de Vite (/api/redgifs) — activo con `npm run dev`
   const proxyData = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
   if (proxyData !== null) {
     return proxyData;
   }
 
-  // 3. Fallback adicional con proxy CORS público para entornos web aislados como Bolt.new
-  const fallbackData = await tryFetchEndpoint<T>(
-    `https://corsproxy.io/?url=${encodeURIComponent(`https://api.redgifs.com/v2${path}`)}`,
-    options
-  );
-  if (fallbackData !== null) {
-    return fallbackData;
+  // 3. Proxy CORS gratuito allorigins.win (solo para rutas sin Authorization)
+  const hasAuth = !!(options.headers && (options.headers as Record<string, string>)['Authorization']);
+  if (!hasAuth) {
+    const allOriginsData = await tryAllOriginsProxy<T>(path, options);
+    if (allOriginsData !== null) {
+      return allOriginsData;
+    }
   }
 
   throw new Error('No se pudo conectar con la API de RedGIFs. Comprueba tu conexión a internet.');
@@ -187,6 +237,15 @@ export function isIOS(): boolean {
 }
 
 /**
+ * Detecta si el navegador es Aloha Browser (iOS/iPadOS).
+ * Aloha tiene su propio gestor de descargas que intercepta <a download> con URLs directas.
+ */
+export function isAloha(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Aloha/i.test(navigator.userAgent);
+}
+
+/**
  * Descarga el video en memoria como Blob con reporte de progreso en vivo.
  */
 export async function fetchVideoBlob(
@@ -230,12 +289,51 @@ export async function fetchVideoBlob(
 
 /**
  * Descarga y dispara el guardado del archivo en el sistema operativo.
+ * Rutas según entorno:
+ *   1. Aloha Browser  → <a href=url download> directo (el gestor de Aloha lo intercepta)
+ *   2. iOS Safari     → navigator.share(url) o window.open (no soporta blobs externos)
+ *   3. PC / Android   → fetch blob + <a download> estándar
  */
 export async function downloadVideoFile(
   mediaUrl: string,
   filename: string,
   onProgress?: (progressPercent: number, downloadedMb: number, totalMb: number) => void
 ): Promise<void> {
+
+  // ── Aloha Browser (iOS/iPadOS) ───────────────────────────────────────────────
+  // Aloha tiene un gestor de descargas propio: basta con disparar un <a download>
+  // apuntando a la URL directa. No hace falta blob ni navigator.share.
+  if (isAloha()) {
+    const a = document.createElement('a');
+    a.href = mediaUrl;
+    a.download = filename;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+
+  // ── Safari iOS / iPadOS ──────────────────────────────────────────────────────
+  // Safari bloquea los fetch de blobs de dominios externos (CORS) y lanza
+  // "The string did not match the expected pattern". Usamos la URL directa.
+  if (isIOS()) {
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      try {
+        await navigator.share({ url: mediaUrl, title: filename });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return; // El usuario canceló
+        // Si share falla, continuar hacia window.open
+      }
+    }
+    // Fallback: abrir en nueva pestaña → mantener pulsado el vídeo → Guardar
+    window.open(mediaUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  // ── PC / Android ─────────────────────────────────────────────────────────────
   const blob = await fetchVideoBlob(mediaUrl, onProgress);
   await triggerBlobDownload(blob, filename, mediaUrl);
 }
