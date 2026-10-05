@@ -197,14 +197,166 @@ export interface SearchQueryResult {
   total: number;
 }
 
+export interface TagSuggestion {
+  type: 'tag' | 'creator';
+  text: string;
+  gifs?: number;
+}
+
+export interface ParsedQuery {
+  raw: string;
+  included: string[];
+  excluded: string[];
+  primaryTerm: string;
+}
+
 /**
- * Búsqueda avanzada en RedGIFs con soporte de paginación y metadatos completos (audio, likes, tags).
+ * Parsea consultas con operadores booleanos (+, -, AND, NOT).
+ * Ejemplos:
+ *  - "baile + fitness" -> included: ["baile", "fitness"], excluded: []
+ *  - "playa -compilation" -> included: ["playa"], excluded: ["compilation"]
+ *  - "dance AND gym NOT compilation" -> included: ["dance", "gym"], excluded: ["compilation"]
  */
-export async function searchVideosExtended(query: string, count = 24, page = 1): Promise<SearchQueryResult> {
+export function parseBooleanQuery(rawQuery: string): ParsedQuery {
+  const trimmed = rawQuery.trim();
+  if (!trimmed) {
+    return { raw: '', included: [], excluded: [], primaryTerm: 'trending' };
+  }
+
+  const included: string[] = [];
+  const excluded: string[] = [];
+
+  const parts = trimmed
+    .replace(/\bAND\b/gi, ' +')
+    .replace(/\bNOT\b/gi, ' -')
+    .split(/\s+/);
+
+  for (const part of parts) {
+    let clean = part.trim();
+    if (!clean || clean === '+' || clean === ',') continue;
+
+    if (clean.startsWith('-')) {
+      clean = clean.slice(1).trim().replace(/^[#,]/, '');
+      if (clean) excluded.push(clean.toLowerCase());
+      continue;
+    }
+
+    if (clean.startsWith('+')) {
+      clean = clean.slice(1).trim();
+    }
+
+    clean = clean.replace(/^[#,]/, '');
+    if (clean) {
+      included.push(clean.toLowerCase());
+    }
+  }
+
+  const primaryTerm = included.length > 0 ? included.join(' ') : (trimmed.replace(/^[-+]/, '') || 'trending');
+
+  return {
+    raw: trimmed,
+    included,
+    excluded,
+    primaryTerm
+  };
+}
+
+/**
+ * Valida si un video cumple con los criterios booleanos y filtros de calidad.
+ */
+export function matchBooleanFilter(
+  item: SearchResultItem,
+  parsed: ParsedQuery,
+  minViews: number = 0,
+  requireHD: boolean = false
+): boolean {
+  const itemText = [
+    item.title || '',
+    item.userName || '',
+    ...(item.tags || [])
+  ].join(' ').toLowerCase();
+
+  // 1. Exclusiones: Si contiene cualquiera de los términos prohibidos, se descarta
+  for (const exc of parsed.excluded) {
+    if (itemText.includes(exc)) {
+      return false;
+    }
+  }
+
+  // 2. Inclusiones múltiples (AND): Debe contener todas las palabras/tags
+  if (parsed.included.length > 1) {
+    for (const inc of parsed.included) {
+      if (!itemText.includes(inc)) {
+        return false;
+      }
+    }
+  }
+
+  // 3. Vistas mínimas
+  if (minViews > 0 && item.views < minViews) {
+    return false;
+  }
+
+  // 4. Calidad HD obligatoria
+  if (requireHD && !item.hd_url) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Obtiene sugerencias de autocompletado en vivo de tags y creadores desde RedGIFs.
+ */
+export async function getSearchSuggestions(query: string): Promise<TagSuggestion[]> {
+  const clean = query.trim();
+  if (!clean || clean.length < 2) return [];
+
+  // Extraer la última palabra que está escribiendo el usuario
+  const tokens = clean.split(/[\s+,]+/);
+  const activeWord = tokens[tokens.length - 1].replace(/^[-@#]/, '');
+  if (!activeWord || activeWord.length < 2) return [];
+
+  try {
+    const token = await getAuthToken();
+    const data = await requestRedGifsJson<any>(`/search/suggest?query=${encodeURIComponent(activeWord)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (Array.isArray(data)) {
+      return data.slice(0, 10).map((item: any) => ({
+        type: item.type === 'creator' ? 'creator' : 'tag',
+        text: item.text || item.name || '',
+        gifs: Number(item.gifs) || 0
+      }));
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Búsqueda avanzada en RedGIFs con soporte de booleanos (+/-), paginación y metadatos.
+ */
+export async function searchVideosExtended(
+  query: string,
+  count = 24,
+  page = 1,
+  options: {
+    minViews?: number;
+    requireHD?: boolean;
+  } = {}
+): Promise<SearchQueryResult> {
+  const parsed = parseBooleanQuery(query);
+  const isComplex = parsed.included.length > 1 || parsed.excluded.length > 0 || (options.minViews && options.minViews > 0) || options.requireHD;
+
   const token = await getAuthToken();
   const params = new URLSearchParams({
-    search_text: query,
-    count: String(count),
+    search_text: parsed.primaryTerm,
+    count: String(Math.max(count, isComplex ? 40 : count)),
     page: String(page)
   });
 
@@ -215,7 +367,7 @@ export async function searchVideosExtended(query: string, count = 24, page = 1):
   });
 
   const gifs = data.gifs || [];
-  const items: SearchResultItem[] = gifs.map((g: any) => {
+  let items: SearchResultItem[] = gifs.map((g: any) => {
     const urls = g.urls || {};
     return {
       id: g.id,
@@ -235,6 +387,10 @@ export async function searchVideosExtended(query: string, count = 24, page = 1):
       watch_url: `https://www.redgifs.com/watch/${g.id}`
     };
   });
+
+  if (isComplex) {
+    items = items.filter(item => matchBooleanFilter(item, parsed, options.minViews, options.requireHD));
+  }
 
   return {
     items,

@@ -14,19 +14,28 @@ import {
   Square,
   Copy,
   Check,
-  ExternalLink,
-  ChevronDown,
   LayoutGrid,
   List,
-  Flame,
-  Music,
-  Share2,
   RefreshCw,
   FolderDown,
-  X
+  X,
+  User,
+  Plus,
+  Minus,
+  SlidersHorizontal,
+  Tag,
+  Flame,
+  CheckCircle2
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
-import { searchVideosExtended, getVideoInfo, downloadVideoFile, saveVideoWithPicker } from '../services/redgifs';
+import {
+  searchVideosExtended,
+  getVideoInfo,
+  downloadVideoFile,
+  getSearchSuggestions,
+  parseBooleanQuery,
+  TagSuggestion
+} from '../services/redgifs';
 
 interface ExploreSearchProps {
   onOpenLightbox: (url: string, title: string) => void;
@@ -51,6 +60,14 @@ const POPULAR_TAGS = [
   { label: '✨ Modelo', query: 'model' },
 ];
 
+const BOOLEAN_PRESETS = [
+  { label: '💃 Baile + 🏋️ Fitness', query: 'dance + fitness' },
+  { label: '🏖️ Playa - 🎬 Compilación', query: 'beach -compilation' },
+  { label: '🎮 Gaming + 🎭 Cosplay', query: 'gaming + cosplay' },
+  { label: '✨ Model + ⭐ Viral', query: 'model + viral' },
+  { label: '🎵 Sound + 💃 Dance', query: 'sound + dance' }
+];
+
 export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onOpenLightbox,
   onSuccessDownload,
@@ -67,9 +84,16 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Filtros y orden
+  // Sugerencias de autocompletado en vivo
+  const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Filtros avanzados y orden
   const [audioFilter, setAudioFilter] = useState<'all' | 'audio' | 'mute'>('all');
   const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
+  const [qualityFilter, setQualityFilter] = useState<'all' | 'hd'>('all');
+  const [minViewsFilter, setMinViewsFilter] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'relevance' | 'views' | 'likes' | 'duration_desc' | 'duration_asc'>('relevance');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -90,12 +114,41 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
   });
 
-  // Copiado temporal feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Carga inicial automática de tendencias
   useEffect(() => {
     executeSearch('trending', 1, false);
+  }, []);
+
+  // Autocompletado en vivo con debounce
+  useEffect(() => {
+    const clean = searchQuery.trim();
+    if (!clean || clean.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const results = await getSearchSuggestions(clean);
+      setSuggestions(results);
+      if (results.length > 0) {
+        setShowSuggestions(true);
+      }
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Cerrar sugerencias al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const saveRecentSearch = (term: string) => {
@@ -115,6 +168,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   const executeSearch = async (query: string, page = 1, append = false) => {
     const term = query.trim() || 'trending';
+    setShowSuggestions(false);
+
     if (page === 1) {
       setIsSearching(true);
     } else {
@@ -122,7 +177,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
 
     try {
-      const res = await searchVideosExtended(term, 24, page);
+      const res = await searchVideosExtended(term, 24, page, {
+        minViews: minViewsFilter,
+        requireHD: qualityFilter === 'hd'
+      });
+
       if (append) {
         setSearchResults(prev => {
           const existingIds = new Set(prev.map(p => p.id));
@@ -132,9 +191,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       } else {
         setSearchResults(res.items);
       }
+
       setCurrentPage(res.page);
       setTotalPages(res.pages);
       setTotalCount(res.total);
+
       if (!append && term !== 'trending') {
         saveRecentSearch(term);
       }
@@ -166,9 +227,63 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     executeSearch(term, currentPage + 1, true);
   };
 
-  // Filtrado y ordenación en el cliente para respuesta instantánea
+  // Insertar sugerencia en la barra de búsqueda
+  const handleSelectSuggestion = (s: TagSuggestion) => {
+    const clean = searchQuery.trim();
+    const tokens = clean.split(/\s+/);
+    if (tokens.length <= 1) {
+      setSearchQuery(s.text);
+      executeSearch(s.text, 1, false);
+    } else {
+      tokens[tokens.length - 1] = s.text;
+      const updated = tokens.join(' ');
+      setSearchQuery(updated);
+      executeSearch(updated, 1, false);
+    }
+    setShowSuggestions(false);
+  };
+
+  // Operadores booleanos rápidos
+  const appendOperator = (op: '+' | '-') => {
+    const current = searchQuery.trim();
+    if (!current) {
+      setSearchQuery(op === '+' ? '+' : '-');
+    } else {
+      setSearchQuery(`${current} ${op}`);
+    }
+  };
+
+  // Desglosar la consulta booleana actual
+  const parsedActiveQuery = useMemo(() => {
+    return parseBooleanQuery(searchQuery);
+  }, [searchQuery]);
+
+  const removeQueryToken = (tokenToRemove: string, isExcluded: boolean) => {
+    let updated = searchQuery;
+    if (isExcluded) {
+      const reg = new RegExp(`\\s*-\\s*${tokenToRemove}\\b`, 'gi');
+      updated = updated.replace(reg, '').trim();
+    } else {
+      const reg = new RegExp(`(\\s*\\+\\s*${tokenToRemove}\\b|\\b${tokenToRemove}\\b)`, 'gi');
+      updated = updated.replace(reg, '').trim();
+    }
+    setSearchQuery(updated);
+    executeSearch(updated || 'trending', 1, false);
+  };
+
+  // Filtrado y ordenación en el cliente
   const filteredResults = useMemo(() => {
     let list = [...searchResults];
+
+    // Filtro Calidad
+    if (qualityFilter === 'hd') {
+      list = list.filter(item => Boolean(item.hd_url));
+    }
+
+    // Filtro Vistas Mínimas
+    if (minViewsFilter > 0) {
+      list = list.filter(item => item.views >= minViewsFilter);
+    }
 
     // Filtro Audio
     if (audioFilter === 'audio') {
@@ -198,9 +313,9 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
 
     return list;
-  }, [searchResults, audioFilter, durationFilter, sortBy]);
+  }, [searchResults, audioFilter, durationFilter, qualityFilter, minViewsFilter, sortBy]);
 
-  // Manejo de Selección Múltiple
+  // Selección Múltiple
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setSelectedIds(prev => {
@@ -237,7 +352,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
   };
 
-  // Descargas individuales directas
+  // Descargas individuales
   const handleDownload = async (item: SearchResultItem, quality: 'hd' | 'sd', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     showToast(`Preparando descarga de @${item.userName}...`);
@@ -272,84 +387,176 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       {/* Hero & Buscador Principal */}
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5" /> EXPLORADOR PROFESIONAL REDGIFS
+          <Sparkles className="w-3.5 h-3.5" /> BÚSQUEDA BOOLEANA & MULTI-TAG PRO
         </div>
         <h2 className="text-3xl sm:text-4xl font-black font-display tracking-tight text-white">
           Busca cualquier video en máxima resolución
         </h2>
         <p className="text-slate-400 text-xs sm:text-sm">
-          Explora millones de videos, previsualiza con audio, filtra por duración o envía lotes enteros a compilar.
+          Combina etiquetas con <span className="text-emerald-400 font-bold">+</span>, excluye términos con <span className="text-red-400 font-bold">-</span> y filtra con autocompletado en tiempo real.
         </p>
 
-        {/* Input de Búsqueda de Alta Gama */}
-        <form onSubmit={handleFormSubmit} className="relative flex items-center shadow-2xl shadow-red-600/10 rounded-2xl overflow-hidden border border-white/15 bg-[#12141c] focus-within:border-red-500/80 transition-all duration-300">
-          <div className="pl-4 text-slate-400">
-            <Search className="w-5 h-5 text-red-500" />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por tag, categoría, modelo, creador..."
-            className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                executeSearch('trending', 1, false);
+        {/* Input de Búsqueda con Autocompletado */}
+        <div ref={searchContainerRef} className="relative">
+          <form onSubmit={handleFormSubmit} className="relative flex items-center shadow-2xl shadow-red-600/10 rounded-2xl overflow-hidden border border-white/15 bg-[#12141c] focus-within:border-red-500/80 transition-all duration-300">
+            <div className="pl-4 text-slate-400">
+              <Search className="w-5 h-5 text-red-500" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => {
+                if (suggestions.length > 0) setShowSuggestions(true);
               }}
-              className="p-2 text-slate-400 hover:text-white transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={isSearching}
-            className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {isSearching ? (
-              <span className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin" /> Buscando...
-              </span>
-            ) : (
-              'Buscar'
-            )}
-          </button>
-        </form>
-
-        {/* Historial de búsquedas recientes */}
-        {recentSearches.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-xs">
-            <span className="text-slate-500 font-medium mr-1">Recientes:</span>
-            {recentSearches.map((term) => (
+              placeholder="Ejemplo: baile + fitness -compilacion..."
+              className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
+            />
+            {searchQuery && (
               <button
-                key={term}
                 type="button"
                 onClick={() => {
-                  setSearchQuery(term);
-                  executeSearch(term, 1, false);
+                  setSearchQuery('');
+                  setSuggestions([]);
+                  executeSearch('trending', 1, false);
                 }}
-                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 flex items-center gap-1 transition-colors"
+                className="p-2 text-slate-400 hover:text-white transition-colors"
               >
-                <span>{term}</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => removeRecentSearch(term, e)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      removeRecentSearch(term, e as any);
-                    }
-                  }}
-                  className="hover:text-red-400 cursor-pointer ml-0.5"
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={isSearching}
+              className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {isSearching ? (
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Buscando...
+                </span>
+              ) : (
+                'Buscar'
+              )}
+            </button>
+          </form>
+
+          {/* Menú Flotante de Autocompletado en Vivo */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-[#12141c]/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl shadow-black/80 z-50 overflow-hidden text-left animate-fadeIn">
+              <div className="px-3 py-2 border-b border-white/10 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Sugerencias inteligentes</span>
+                <span className="text-[10px] text-slate-500">Pulsa para autocompletar</span>
+              </div>
+              <div className="max-h-60 overflow-y-auto divide-y divide-white/5">
+                {suggestions.map((s, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(s)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/10 text-slate-200 hover:text-white transition-colors cursor-pointer text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      {s.type === 'creator' ? (
+                        <span className="p-1 rounded-md bg-purple-500/20 text-purple-400">
+                          <User className="w-3.5 h-3.5" />
+                        </span>
+                      ) : (
+                        <span className="p-1 rounded-md bg-red-500/20 text-red-400">
+                          <Tag className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                      <span className="font-semibold">{s.text}</span>
+                      {s.type === 'creator' && (
+                        <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-bold">
+                          Creador
+                        </span>
+                      )}
+                    </div>
+                    {typeof s.gifs === 'number' && s.gifs > 0 && (
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        {s.gifs.toLocaleString()} videos
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Barra de Operadores Booleanos y Ejemplos Rápidos */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+            <span className="text-slate-400 font-bold px-2">Operadores:</span>
+            <button
+              type="button"
+              onClick={() => appendOperator('+')}
+              className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-extrabold flex items-center gap-1 transition-transform active:scale-95 cursor-pointer"
+              title="Incluir término obligatorio (AND)"
+            >
+              <Plus className="w-3 h-3" /> AND (Incluir)
+            </button>
+            <button
+              type="button"
+              onClick={() => appendOperator('-')}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-lg font-extrabold flex items-center gap-1 transition-transform active:scale-95 cursor-pointer"
+              title="Excluir término (NOT)"
+            >
+              <Minus className="w-3 h-3" /> NOT (Excluir)
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1">
+            <span className="text-slate-500 font-semibold mr-1">Presets:</span>
+            {BOOLEAN_PRESETS.map((p) => (
+              <button
+                key={p.query}
+                type="button"
+                onClick={() => {
+                  setSearchQuery(p.query);
+                  executeSearch(p.query, 1, false);
+                }}
+                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors shrink-0 cursor-pointer font-medium"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desglose de Etiquetas Booleanas Activas */}
+        {(parsedActiveQuery.included.length > 1 || parsedActiveQuery.excluded.length > 0) && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-xs">
+            <span className="text-slate-400 font-bold mr-1">Filtros Activos:</span>
+            {parsedActiveQuery.included.map((inc) => (
+              <span
+                key={inc}
+                className="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-bold"
+              >
+                <span>+{inc}</span>
+                <button
+                  type="button"
+                  onClick={() => removeQueryToken(inc, false)}
+                  className="hover:text-emerald-100 cursor-pointer ml-1"
                 >
                   ×
-                </span>
-              </button>
+                </button>
+              </span>
+            ))}
+            {parsedActiveQuery.excluded.map((exc) => (
+              <span
+                key={exc}
+                className="bg-red-600/20 border border-red-500/40 text-red-300 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-bold"
+              >
+                <span>-{exc}</span>
+                <button
+                  type="button"
+                  onClick={() => removeQueryToken(exc, true)}
+                  className="hover:text-red-100 cursor-pointer ml-1"
+                >
+                  ×
+                </button>
+              </span>
             ))}
           </div>
         )}
@@ -384,7 +591,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             </span>
             {totalCount > 0 && (
               <span className="text-xs text-slate-400">
-                (de {totalCount.toLocaleString()} disponibles)
+                (de {totalCount.toLocaleString()} encontrados)
               </span>
             )}
           </div>
@@ -412,13 +619,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               type="button"
               onClick={() => setShowFilters(!showFilters)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                showFilters || audioFilter !== 'all' || durationFilter !== 'all' || sortBy !== 'relevance'
+                showFilters || audioFilter !== 'all' || durationFilter !== 'all' || qualityFilter !== 'all' || minViewsFilter > 0 || sortBy !== 'relevance'
                   ? 'bg-red-600/20 text-red-400 border-red-500/40'
                   : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
               }`}
             >
-              <Filter className="w-3.5 h-3.5" />
-              <span>Filtros {showFilters ? '▲' : '▼'}</span>
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Filtros Pro {showFilters ? '▲' : '▼'}</span>
             </button>
 
             {/* Toggle Cuadrícula / Lista */}
@@ -426,7 +633,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'grid' ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                 title="Vista en cuadrícula"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -434,7 +641,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${viewMode === 'list' ? 'bg-white/15 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                 title="Vista compacta en lista"
               >
                 <List className="w-4 h-4" />
@@ -443,9 +650,30 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
           </div>
         </div>
 
-        {/* Panel Desplegable de Filtros */}
+        {/* Panel Desplegable de Filtros Avanzados */}
         {showFilters && (
-          <div className="pt-3 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="pt-3 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            {/* Calidad Mínima */}
+            <div className="space-y-1">
+              <span className="text-slate-400 font-semibold block">Calidad Mínima:</span>
+              <div className="flex rounded-lg bg-black/40 p-1 border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setQualityFilter('all')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${qualityFilter === 'all' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQualityFilter('hd')}
+                  className={`flex-1 py-1 rounded text-center transition-colors font-bold cursor-pointer ${qualityFilter === 'hd' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400'}`}
+                >
+                  Solo HD 1080p
+                </button>
+              </div>
+            </div>
+
             {/* Filtro Audio */}
             <div className="space-y-1">
               <span className="text-slate-400 font-semibold block">Audio:</span>
@@ -453,60 +681,40 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 <button
                   type="button"
                   onClick={() => setAudioFilter('all')}
-                  className={`flex-1 py-1 rounded text-center transition-colors ${audioFilter === 'all' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${audioFilter === 'all' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
                 >
                   Todos
                 </button>
                 <button
                   type="button"
                   onClick={() => setAudioFilter('audio')}
-                  className={`flex-1 py-1 rounded text-center transition-colors flex items-center justify-center gap-1 ${audioFilter === 'audio' ? 'bg-emerald-600/40 text-emerald-300 font-bold' : 'text-slate-400'}`}
+                  className={`flex-1 py-1 rounded text-center transition-colors flex items-center justify-center gap-1 cursor-pointer ${audioFilter === 'audio' ? 'bg-emerald-600/40 text-emerald-300 font-bold' : 'text-slate-400'}`}
                 >
                   <Volume2 className="w-3 h-3" /> Con sonido
                 </button>
                 <button
                   type="button"
                   onClick={() => setAudioFilter('mute')}
-                  className={`flex-1 py-1 rounded text-center transition-colors flex items-center justify-center gap-1 ${audioFilter === 'mute' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                  className={`flex-1 py-1 rounded text-center transition-colors flex items-center justify-center gap-1 cursor-pointer ${audioFilter === 'mute' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
                 >
                   <VolumeX className="w-3 h-3" /> Silencio
                 </button>
               </div>
             </div>
 
-            {/* Filtro Duración */}
+            {/* Vistas Mínimas */}
             <div className="space-y-1">
-              <span className="text-slate-400 font-semibold block">Duración:</span>
-              <div className="flex rounded-lg bg-black/40 p-1 border border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setDurationFilter('all')}
-                  className={`flex-1 py-1 rounded text-center transition-colors ${durationFilter === 'all' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
-                >
-                  Todas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDurationFilter('short')}
-                  className={`flex-1 py-1 rounded text-center transition-colors ${durationFilter === 'short' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
-                >
-                  &lt;15s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDurationFilter('medium')}
-                  className={`flex-1 py-1 rounded text-center transition-colors ${durationFilter === 'medium' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
-                >
-                  15-30s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDurationFilter('long')}
-                  className={`flex-1 py-1 rounded text-center transition-colors ${durationFilter === 'long' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
-                >
-                  &gt;30s
-                </button>
-              </div>
+              <span className="text-slate-400 font-semibold block">Popularidad (Vistas):</span>
+              <select
+                value={minViewsFilter}
+                onChange={(e) => setMinViewsFilter(Number(e.target.value))}
+                className="w-full bg-black/40 border border-white/10 text-slate-200 py-1.5 px-3 rounded-lg outline-none font-medium cursor-pointer"
+              >
+                <option value={0}>Cualquier cantidad</option>
+                <option value={1000}>Mínimo +1,000 vistas</option>
+                <option value={10000}>Mínimo +10,000 vistas</option>
+                <option value={50000}>Mínimo +50,000 vistas (Viral)</option>
+              </select>
             </div>
 
             {/* Ordenación */}
@@ -561,7 +769,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   </button>
                 )}
 
-                {/* Área de Previsualización (Thumbnail / Video Hover) */}
+                {/* Área de Previsualización */}
                 <div
                   role="button"
                   tabIndex={0}
@@ -584,7 +792,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   }}
                   className="relative aspect-[16/10] bg-black overflow-hidden cursor-pointer w-full text-left"
                 >
-                  {/* Imagen Thumbnail */}
                   <img
                     src={item.thumbnail_url}
                     alt={item.title}
@@ -594,7 +801,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     }`}
                   />
 
-                  {/* Video Preview al hacer Hover */}
                   {isHovered && item.silent_url && (
                     <video
                       src={item.silent_url}
@@ -606,14 +812,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     />
                   )}
 
-                  {/* Botón Central de Play */}
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200 z-10 pointer-events-none">
                     <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl shadow-red-600/50 transform group-hover:scale-110 transition-transform">
                       <Play className="w-6 h-6 fill-white ml-0.5" />
                     </div>
                   </div>
 
-                  {/* Badges Flotantes sobre el video */}
+                  {/* Badges Flotantes */}
                   <div className="absolute top-2 right-2 flex items-center gap-1 z-10 pointer-events-none">
                     {item.hasAudio ? (
                       <span className="bg-black/80 backdrop-blur-md text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-emerald-500/30">
@@ -687,7 +892,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                               setSearchQuery(t);
                               executeSearch(t, 1, false);
                             }}
-                            className="text-[10px] bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded-md border border-white/5 transition-colors truncate max-w-[110px]"
+                            className="text-[10px] bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded-md border border-white/5 transition-colors truncate max-w-[110px] cursor-pointer"
                           >
                             #{t}
                           </button>
@@ -852,7 +1057,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
         </div>
       )}
 
-      {/* Barra Flotante de Acciones en Lote (Sticky Bottom Action Bar) */}
+      {/* Barra Flotante de Acciones en Lote */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-2xl bg-gradient-to-r from-[#1b172a] via-[#1a1c2b] to-[#1b172a] border-2 border-purple-500/80 p-4 rounded-3xl shadow-2xl shadow-purple-950/60 backdrop-blur-xl animate-fadeIn flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
