@@ -10,7 +10,23 @@ export default async function handler(req: any, res: any) {
 
   const rawPath = req.query?.path;
   const path = Array.isArray(rawPath) ? rawPath.join('/') : (rawPath || '');
-  const url = `https://api.redgifs.com/v2/${path}`;
+
+  // Reenviar todos los parámetros de consulta (search_text, page, count, order, etc.)
+  const searchParams = new URLSearchParams();
+  if (req.query) {
+    for (const [key, value] of Object.entries(req.query)) {
+      if (key !== 'path' && value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          value.forEach((v) => searchParams.append(key, String(v)));
+        } else {
+          searchParams.append(key, String(value));
+        }
+      }
+    }
+  }
+
+  const qs = searchParams.toString();
+  const url = `https://api.redgifs.com/v2/${path}${qs ? `?${qs}` : ''}`;
 
   const headers: Record<string, string> = {
     'Referer': 'https://www.redgifs.com/',
