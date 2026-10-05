@@ -41,3 +41,29 @@ export interface HistoryItem {
   url: string;
   size_mb?: number;
 }
+
+export interface UserProfile {
+  username: string;
+  name?: string;
+  description?: string;
+  followers: number;
+  following: number;
+  gifs: number;
+  views: number;
+  likes?: number;
+  profileImageUrl?: string;
+  profileUrl?: string;
+  url: string;
+  verified: boolean;
+  studio?: boolean;
+  socialLinks?: { type: string; url: string }[];
+}
+
+export interface CreatorFeedResult {
+  user: UserProfile | null;
+  items: SearchResultItem[];
+  page: number;
+  pages: number;
+  total: number;
+}
+

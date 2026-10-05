@@ -1,9 +1,9 @@
 import React from 'react';
-import { Download, Layers, Search, History } from 'lucide-react';
+import { Download, Layers, Search, History, User } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'single' | 'batch' | 'explore' | 'history';
-  setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'history') => void;
+  activeTab: 'single' | 'batch' | 'explore' | 'creators' | 'history';
+  setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'creators' | 'history') => void;
   historyCount: number;
 }
 
@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, history
           <button
             type="button"
             onClick={() => setActiveTab('single')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 ${
               activeTab === 'single' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, history
           <button
             type="button"
             onClick={() => setActiveTab('batch')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 ${
               activeTab === 'batch' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -46,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, history
           <button
             type="button"
             onClick={() => setActiveTab('explore')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 ${
               activeTab === 'explore' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -54,8 +54,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, history
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('creators')}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 ${
+              activeTab === 'creators' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <User className="w-4 h-4" /> Creadores
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold transition-colors duration-200 ${
+            className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 ${
               activeTab === 'history' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >

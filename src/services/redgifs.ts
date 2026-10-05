@@ -1,4 +1,4 @@
-import { RedGifItem, SearchResultItem } from '../types';
+import { RedGifItem, SearchResultItem, UserProfile, CreatorFeedResult } from '../types';
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
@@ -251,6 +251,179 @@ export async function searchVideos(query: string, count = 20, page = 1): Promise
   const res = await searchVideosExtended(query, count, page);
   return res.items;
 }
+
+function extractSocialLinks(u: any): { type: string; url: string }[] {
+  const links: { type: string; url: string }[] = [];
+  if (u.profileUrl) {
+    let type = 'Website';
+    if (u.profileUrl.includes('onlyfans.com')) type = 'OnlyFans';
+    else if (u.profileUrl.includes('fansly.com')) type = 'Fansly';
+    else if (u.profileUrl.includes('instagram.com')) type = 'Instagram';
+    else if (u.profileUrl.includes('twitter.com') || u.profileUrl.includes('x.com')) type = 'X / Twitter';
+    links.push({ type, url: u.profileUrl });
+  }
+  for (let i = 1; i <= 18; i++) {
+    const sUrl = u[`socialUrl${i}`];
+    if (sUrl && typeof sUrl === 'string' && sUrl.startsWith('http')) {
+      let type = 'Enlace';
+      if (sUrl.includes('onlyfans.com')) type = 'OnlyFans';
+      else if (sUrl.includes('instagram.com')) type = 'Instagram';
+      else if (sUrl.includes('twitter.com') || sUrl.includes('x.com')) type = 'X / Twitter';
+      else if (sUrl.includes('fansly.com')) type = 'Fansly';
+      else if (sUrl.includes('patreon.com')) type = 'Patreon';
+      else if (sUrl.includes('tiktok.com')) type = 'TikTok';
+      else if (sUrl.includes('youtube.com')) type = 'YouTube';
+      if (!links.some(l => l.url === sUrl)) {
+        links.push({ type, url: sUrl });
+      }
+    }
+  }
+  return links;
+}
+
+/**
+ * Obtiene el perfil completo y catálogo de videos de un creador con ordenación y paginación.
+ */
+export async function getCreatorFeed(
+  username: string,
+  order: 'best' | 'recent' | 'trending' = 'best',
+  count = 24,
+  page = 1
+): Promise<CreatorFeedResult> {
+  const cleanUser = username.trim().replace(/^@/, '');
+  if (!cleanUser) {
+    throw new Error('Por favor especifica un nombre de creador válido.');
+  }
+
+  const token = await getAuthToken();
+  const params = new URLSearchParams({
+    order,
+    count: String(count),
+    page: String(page)
+  });
+
+  const data = await requestRedGifsJson<any>(`/users/${encodeURIComponent(cleanUser)}/search?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  let userProfile: UserProfile | null = null;
+  const rawUsers = Array.isArray(data.users) ? data.users : [];
+  const foundUser = rawUsers.find(
+    (u: any) => u.username?.toLowerCase() === cleanUser.toLowerCase()
+  ) || rawUsers[0];
+
+  if (foundUser) {
+    userProfile = {
+      username: foundUser.username || cleanUser,
+      name: foundUser.name || foundUser.username || cleanUser,
+      description: foundUser.description || undefined,
+      followers: Number(foundUser.followers) || 0,
+      following: Number(foundUser.following) || 0,
+      gifs: Number(foundUser.publishedGifs || foundUser.gifs) || 0,
+      views: Number(foundUser.views) || 0,
+      likes: Number(foundUser.likes) || 0,
+      profileImageUrl: foundUser.profileImageUrl || undefined,
+      profileUrl: foundUser.profileUrl || undefined,
+      url: foundUser.url || `https://www.redgifs.com/users/${foundUser.username || cleanUser}`,
+      verified: Boolean(foundUser.verified),
+      studio: Boolean(foundUser.studio),
+      socialLinks: extractSocialLinks(foundUser)
+    };
+  }
+
+  const gifs = Array.isArray(data.gifs) ? data.gifs : [];
+  const items: SearchResultItem[] = gifs.map((g: any) => {
+    const urls = g.urls || {};
+    return {
+      id: g.id,
+      title: (g.tags && g.tags.length > 0 ? g.tags.slice(0, 3).join(', ') : g.id) || 'Video',
+      userName: g.userName || cleanUser,
+      duration: Math.round((Number(g.duration) || 0) * 10) / 10,
+      views: Number(g.views) || 0,
+      likes: Number(g.likes) || 0,
+      hasAudio: Boolean(g.hasAudio),
+      verified: Boolean(g.verified),
+      tags: Array.isArray(g.tags) ? g.tags : [],
+      hd_url: urls.hd || urls.sd || '',
+      sd_url: urls.sd || urls.hd || '',
+      silent_url: urls.silent || urls.sd || '',
+      thumbnail_url: urls.thumbnail || urls.poster || '',
+      poster_url: urls.poster || urls.thumbnail || '',
+      watch_url: `https://www.redgifs.com/watch/${g.id}`
+    };
+  });
+
+  return {
+    user: userProfile,
+    items,
+    page: Number(data.page) || page,
+    pages: Number(data.pages) || 1,
+    total: Number(data.total) || items.length
+  };
+}
+
+/**
+ * Busca creadores por nombre de usuario o palabra clave.
+ */
+export async function searchCreators(query: string, count = 12): Promise<UserProfile[]> {
+  const clean = query.trim().replace(/^@/, '');
+  if (!clean) return [];
+
+  const token = await getAuthToken();
+  const params = new URLSearchParams({
+    search_text: clean,
+    count: String(count)
+  });
+
+  const data = await requestRedGifsJson<any>(`/creators/search?${params.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  return rawItems.map((u: any) => ({
+    username: u.username,
+    name: u.name || u.username,
+    description: u.description || undefined,
+    followers: Number(u.followers) || 0,
+    following: Number(u.following) || 0,
+    gifs: Number(u.publishedGifs || u.gifs) || 0,
+    views: Number(u.views) || 0,
+    likes: Number(u.likes) || 0,
+    profileImageUrl: u.profileImageUrl || undefined,
+    profileUrl: u.profileUrl || undefined,
+    url: u.url || `https://www.redgifs.com/users/${u.username}`,
+    verified: Boolean(u.verified),
+    studio: Boolean(u.studio),
+    socialLinks: extractSocialLinks(u)
+  }));
+}
+
+/**
+ * Obtiene los enlaces directos de los N mejores videos de un creador para descarga o compilación.
+ */
+export async function fetchTopCreatorVideoUrls(username: string, limit: number = 20): Promise<string[]> {
+  const resultUrls: string[] = [];
+  let page = 1;
+  while (resultUrls.length < limit) {
+    const countNeeded = Math.min(30, limit - resultUrls.length);
+    const feed = await getCreatorFeed(username, 'best', countNeeded, page);
+    if (!feed.items || feed.items.length === 0) break;
+    for (const item of feed.items) {
+      if (!resultUrls.includes(item.watch_url)) {
+        resultUrls.push(item.watch_url);
+      }
+      if (resultUrls.length >= limit) break;
+    }
+    if (page >= feed.pages) break;
+    page++;
+  }
+  return resultUrls;
+}
+
 
 /**
  * Detecta si el dispositivo es iOS / iPadOS.

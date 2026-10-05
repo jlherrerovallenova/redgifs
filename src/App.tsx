@@ -4,11 +4,13 @@ import { Header } from './components/Header';
 import { SingleDownloader } from './components/SingleDownloader';
 import { BatchDownloader } from './components/BatchDownloader';
 import { ExploreSearch } from './components/ExploreSearch';
+import { CreatorExplorer } from './components/CreatorExplorer';
 import { HistoryList } from './components/HistoryList';
 import { LightboxModal } from './components/LightboxModal';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'history'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
+  const [selectedCreator, setSelectedCreator] = useState<string>('namiblossom');
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('rg_history') || '[]');
@@ -31,6 +33,11 @@ export default function App() {
   };
 
   const [prefilledBatchUrls, setPrefilledBatchUrls] = useState<string>('');
+
+  const handleOpenCreator = (username: string) => {
+    setSelectedCreator(username);
+    setActiveTab('creators');
+  };
 
   const handleSuccessDownload = (video: RedGifItem, quality: string, filename: string, size_mb?: number) => {
     const newItem: HistoryItem = {
@@ -89,6 +96,21 @@ export default function App() {
             onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
+            onSelectCreator={handleOpenCreator}
+            onSendToBatch={(urls) => {
+              setPrefilledBatchUrls(urls.join('\n'));
+              setActiveTab('batch');
+              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+            }}
+          />
+        )}
+
+        {activeTab === 'creators' && (
+          <CreatorExplorer
+            onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
+            onSuccessDownload={handleSuccessDownload}
+            showToast={showToast}
+            initialUsername={selectedCreator}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');

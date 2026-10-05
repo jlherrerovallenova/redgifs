@@ -33,6 +33,7 @@ interface ExploreSearchProps {
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string) => void;
   showToast: (msg: string) => void;
   onSendToBatch?: (urls: string[]) => void;
+  onSelectCreator?: (username: string) => void;
 }
 
 const POPULAR_TAGS = [
@@ -54,7 +55,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onOpenLightbox,
   onSuccessDownload,
   showToast,
-  onSendToBatch
+  onSendToBatch,
+  onSelectCreator
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string>('trending');
@@ -642,11 +644,15 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSearchQuery(item.userName);
-                          executeSearch(item.userName, 1, false);
+                          if (onSelectCreator) {
+                            onSelectCreator(item.userName);
+                          } else {
+                            setSearchQuery(item.userName);
+                            executeSearch(item.userName, 1, false);
+                          }
                         }}
-                        className="text-red-400 hover:text-red-300 font-bold truncate max-w-[130px] flex items-center gap-1"
-                        title={`Buscar más de @${item.userName}`}
+                        className="text-purple-400 hover:text-purple-300 font-bold truncate max-w-[130px] flex items-center gap-1 hover:underline cursor-pointer"
+                        title={`Ver perfil completo de @${item.userName}`}
                       >
                         @{item.userName}
                       </button>
@@ -774,7 +780,22 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-bold text-white truncate">{item.title}</h3>
                     <div className="flex items-center gap-3 text-xs text-slate-400 pt-0.5">
-                      <span className="text-red-400 font-semibold truncate">@{item.userName}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onSelectCreator) {
+                            onSelectCreator(item.userName);
+                          } else {
+                            setSearchQuery(item.userName);
+                            executeSearch(item.userName, 1, false);
+                          }
+                        }}
+                        className="text-purple-400 hover:text-purple-300 font-semibold truncate hover:underline cursor-pointer"
+                        title={`Ver perfil completo de @${item.userName}`}
+                      >
+                        @{item.userName}
+                      </button>
                       <span>👁️ {item.views.toLocaleString()}</span>
                       {item.hasAudio && (
                         <span className="text-emerald-400 flex items-center gap-0.5 text-[11px]">
