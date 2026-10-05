@@ -403,17 +403,26 @@ export async function searchVideosExtended(
   query: string,
   count = 24,
   page = 1,
-  order: 'trending' | 'top' | 'latest' = 'trending'
+  order?: 'trending' | 'top' | 'latest'
 ): Promise<SearchQueryResult> {
   const parsed = parseBooleanQuery(query);
   const token = await getAuthToken();
 
-  const params = new URLSearchParams({
-    search_text: parsed.primaryTerm,
-    count: String(Math.max(count, parsed.excluded.length > 0 ? 36 : count)),
-    page: String(page),
-    order: order || 'trending'
-  });
+  const isTrending = !parsed.primaryTerm || parsed.primaryTerm.toLowerCase() === 'trending';
+
+  const params = new URLSearchParams();
+  if (isTrending) {
+    if (order && order !== 'trending') {
+      params.append('order', order);
+    }
+  } else {
+    // RedGIFs v2 API filtra videos mediante 'tags' y 'query'
+    params.append('tags', parsed.primaryTerm);
+    params.append('query', parsed.primaryTerm);
+  }
+
+  params.append('count', String(Math.max(count, parsed.excluded.length > 0 ? 36 : count)));
+  params.append('page', String(page));
 
   const data = await requestRedGifsJson<any>(`/gifs/search?${params.toString()}`, {
     headers: {
