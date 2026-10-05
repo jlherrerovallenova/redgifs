@@ -205,24 +205,75 @@ export interface TagSuggestion {
 
 export interface ParsedQuery {
   raw: string;
+  hasExplicitBoolean: boolean;
   included: string[];
   excluded: string[];
   primaryTerm: string;
 }
 
+// Diccionario inteligente de sinónimos Español -> Inglés para optimizar búsquedas en RedGIFs
+const SPANISH_SYNONYMS: Record<string, string> = {
+  'baile': 'dance',
+  'bailando': 'dancing',
+  'chica': 'girl',
+  'chicas': 'girls',
+  'mujer': 'woman',
+  'mujeres': 'women',
+  'playa': 'beach',
+  'coche': 'cars',
+  'coches': 'cars',
+  'rubia': 'blonde',
+  'rubias': 'blonde',
+  'morena': 'brunette',
+  'morenas': 'brunette',
+  'pelirroja': 'redhead',
+  'pelirrojas': 'redhead',
+  'tetas': 'boobs',
+  'pechos': 'boobs',
+  'culo': 'ass',
+  'culona': 'pawg',
+  'gimnasio': 'gym',
+  'pesas': 'fitness',
+  'sonido': 'sound',
+  'audio': 'sound',
+  'modelo': 'model',
+  'modelos': 'model',
+  'mascota': 'pets',
+  'mascotas': 'pets',
+  'gato': 'cat',
+  'perro': 'dog',
+  'verano': 'summer',
+  'fiesta': 'party',
+  'ducha': 'shower',
+  'piscina': 'pool',
+  'caliente': 'hot',
+  'linda': 'cute',
+  'guapa': 'pretty'
+};
+
+export function translateQueryTerms(raw: string): string {
+  const words = raw.split(/\s+/);
+  const translated = words.map(w => {
+    const clean = w.toLowerCase().replace(/^[-+#@]/, '');
+    const prefix = w.startsWith('-') ? '-' : (w.startsWith('+') ? '+' : (w.startsWith('@') ? '@' : ''));
+    if (SPANISH_SYNONYMS[clean]) {
+      return prefix + SPANISH_SYNONYMS[clean];
+    }
+    return w;
+  });
+  return translated.join(' ');
+}
+
 /**
  * Parsea consultas con operadores booleanos (+, -, AND, NOT).
- * Ejemplos:
- *  - "baile + fitness" -> included: ["baile", "fitness"], excluded: []
- *  - "playa -compilation" -> included: ["playa"], excluded: ["compilation"]
- *  - "dance AND gym NOT compilation" -> included: ["dance", "gym"], excluded: ["compilation"]
  */
 export function parseBooleanQuery(rawQuery: string): ParsedQuery {
   const trimmed = rawQuery.trim();
   if (!trimmed) {
-    return { raw: '', included: [], excluded: [], primaryTerm: 'trending' };
+    return { raw: '', hasExplicitBoolean: false, included: [], excluded: [], primaryTerm: 'trending' };
   }
 
+  const hasExplicitBoolean = /[+\-]|\bAND\b|\bNOT\b/i.test(trimmed);
   const included: string[] = [];
   const excluded: string[] = [];
 
@@ -251,23 +302,32 @@ export function parseBooleanQuery(rawQuery: string): ParsedQuery {
     }
   }
 
-  const primaryTerm = included.length > 0 ? included.join(' ') : (trimmed.replace(/^[-+]/, '') || 'trending');
+  // Si no hay operadores booleanos explícitos, usar la frase completa tal cual
+  let primaryTerm = trimmed;
+  if (hasExplicitBoolean) {
+    primaryTerm = included.join(' ');
+    if (!primaryTerm && excluded.length > 0) {
+      primaryTerm = 'trending';
+    }
+  }
+
+  const translatedPrimary = translateQueryTerms(primaryTerm);
 
   return {
     raw: trimmed,
+    hasExplicitBoolean,
     included,
     excluded,
-    primaryTerm
+    primaryTerm: translatedPrimary || 'trending'
   };
 }
 
 /**
- * Valida si un video cumple con los criterios booleanos y filtros de calidad.
+ * Valida si un video cumple con los criterios booleanos de exclusión (-) o inclusión estricta (+).
  */
 export function matchBooleanFilter(
   item: SearchResultItem,
   parsed: ParsedQuery,
-  minViews: number = 0,
   requireHD: boolean = false
 ): boolean {
   const itemText = [
@@ -276,28 +336,25 @@ export function matchBooleanFilter(
     ...(item.tags || [])
   ].join(' ').toLowerCase();
 
-  // 1. Exclusiones: Si contiene cualquiera de los términos prohibidos, se descarta
+  // 1. Exclusiones: Si contiene cualquiera de los términos prohibidos (-termino), se descarta
   for (const exc of parsed.excluded) {
-    if (itemText.includes(exc)) {
+    const excTrans = SPANISH_SYNONYMS[exc] || exc;
+    if (itemText.includes(exc) || itemText.includes(excTrans)) {
       return false;
     }
   }
 
-  // 2. Inclusiones múltiples (AND): Debe contener todas las palabras/tags
-  if (parsed.included.length > 1) {
+  // 2. Inclusiones obligatorias explícitas (+termino): Solo si el usuario usó el operador '+'
+  if (parsed.hasExplicitBoolean && parsed.included.length > 1) {
     for (const inc of parsed.included) {
-      if (!itemText.includes(inc)) {
+      const incTrans = SPANISH_SYNONYMS[inc] || inc;
+      if (!itemText.includes(inc) && !itemText.includes(incTrans)) {
         return false;
       }
     }
   }
 
-  // 3. Vistas mínimas
-  if (minViews > 0 && item.views < minViews) {
-    return false;
-  }
-
-  // 4. Calidad HD obligatoria
+  // 3. Calidad HD obligatoria si se requiere
   if (requireHD && !item.hd_url) {
     return false;
   }
@@ -312,10 +369,11 @@ export async function getSearchSuggestions(query: string): Promise<TagSuggestion
   const clean = query.trim();
   if (!clean || clean.length < 2) return [];
 
-  // Extraer la última palabra que está escribiendo el usuario
   const tokens = clean.split(/[\s+,]+/);
-  const activeWord = tokens[tokens.length - 1].replace(/^[-@#]/, '');
-  if (!activeWord || activeWord.length < 2) return [];
+  const rawWord = tokens[tokens.length - 1].replace(/^[-@#]/, '').toLowerCase();
+  if (!rawWord || rawWord.length < 2) return [];
+
+  const activeWord = SPANISH_SYNONYMS[rawWord] || rawWord;
 
   try {
     const token = await getAuthToken();
@@ -339,25 +397,22 @@ export async function getSearchSuggestions(query: string): Promise<TagSuggestion
 }
 
 /**
- * Búsqueda avanzada en RedGIFs con soporte de booleanos (+/-), paginación y metadatos.
+ * Búsqueda avanzada en RedGIFs con soporte de booleanos (+/-), traducción inteligente y paginación.
  */
 export async function searchVideosExtended(
   query: string,
   count = 24,
   page = 1,
-  options: {
-    minViews?: number;
-    requireHD?: boolean;
-  } = {}
+  order: 'trending' | 'top' | 'latest' = 'trending'
 ): Promise<SearchQueryResult> {
   const parsed = parseBooleanQuery(query);
-  const isComplex = parsed.included.length > 1 || parsed.excluded.length > 0 || (options.minViews && options.minViews > 0) || options.requireHD;
-
   const token = await getAuthToken();
+
   const params = new URLSearchParams({
     search_text: parsed.primaryTerm,
-    count: String(Math.max(count, isComplex ? 40 : count)),
-    page: String(page)
+    count: String(Math.max(count, parsed.excluded.length > 0 ? 36 : count)),
+    page: String(page),
+    order: order || 'trending'
   });
 
   const data = await requestRedGifsJson<any>(`/gifs/search?${params.toString()}`, {
@@ -366,7 +421,7 @@ export async function searchVideosExtended(
     }
   });
 
-  const gifs = data.gifs || [];
+  const gifs = Array.isArray(data.gifs) ? data.gifs : [];
   let items: SearchResultItem[] = gifs.map((g: any) => {
     const urls = g.urls || {};
     return {
@@ -388,8 +443,9 @@ export async function searchVideosExtended(
     };
   });
 
-  if (isComplex) {
-    items = items.filter(item => matchBooleanFilter(item, parsed, options.minViews, options.requireHD));
+  // Filtrado solo si hay exclusiones (-) o AND explícito (+)
+  if (parsed.excluded.length > 0 || (parsed.hasExplicitBoolean && parsed.included.length > 1)) {
+    items = items.filter(item => matchBooleanFilter(item, parsed));
   }
 
   return {

@@ -166,7 +166,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     localStorage.setItem('rg_recent_searches', JSON.stringify(updated));
   };
 
-  const executeSearch = async (query: string, page = 1, append = false) => {
+  const executeSearch = async (query: string, page = 1, append = false, sortOrder?: 'trending' | 'top' | 'latest') => {
     const term = query.trim() || 'trending';
     setShowSuggestions(false);
 
@@ -177,10 +177,14 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
 
     try {
-      const res = await searchVideosExtended(term, 24, page, {
-        minViews: minViewsFilter,
-        requireHD: qualityFilter === 'hd'
-      });
+      let apiOrder: 'trending' | 'top' | 'latest' = 'trending';
+      if (sortOrder) {
+        apiOrder = sortOrder;
+      } else if (sortBy === 'views') {
+        apiOrder = 'top';
+      }
+
+      const res = await searchVideosExtended(term, 24, page, apiOrder);
 
       if (append) {
         setSearchResults(prev => {
@@ -227,8 +231,14 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     executeSearch(term, currentPage + 1, true);
   };
 
-  // Insertar sugerencia en la barra de búsqueda
+  // Insertar sugerencia en la barra de búsqueda o navegar al creador
   const handleSelectSuggestion = (s: TagSuggestion) => {
+    if (s.type === 'creator' && onSelectCreator) {
+      onSelectCreator(s.text);
+      setShowSuggestions(false);
+      return;
+    }
+
     const clean = searchQuery.trim();
     const tokens = clean.split(/\s+/);
     if (tokens.length <= 1) {
