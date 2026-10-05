@@ -24,8 +24,10 @@ import {
   Minus,
   SlidersHorizontal,
   Tag,
-  Flame,
-  CheckCircle2
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import {
@@ -68,6 +70,40 @@ const BOOLEAN_PRESETS = [
   { label: '🎵 Sound + 💃 Dance', query: 'sound + dance' }
 ];
 
+function getVisiblePageNumbers(current: number, total: number, maxVisible = 5): (number | string)[] {
+  if (total <= maxVisible + 2) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages: (number | string)[] = [];
+  const half = Math.floor(maxVisible / 2);
+  let start = Math.max(2, current - half);
+  let end = Math.min(total - 1, current + half);
+
+  if (current <= half + 2) {
+    end = Math.min(total - 1, maxVisible + 1);
+  }
+  if (current >= total - half - 1) {
+    start = Math.max(2, total - maxVisible);
+  }
+
+  pages.push(1);
+  if (start > 2) {
+    pages.push('...');
+  }
+
+  for (let i = start; i <= end; i++) {
+    pages.push(i);
+  }
+
+  if (end < total - 1) {
+    pages.push('...');
+  }
+  pages.push(total);
+
+  return pages;
+}
+
 export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onOpenLightbox,
   onSuccessDownload,
@@ -78,22 +114,23 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string>('trending');
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  // Referencias para scroll y menú flotante
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
   // Sugerencias de autocompletado en vivo
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Filtros avanzados y orden
   const [audioFilter, setAudioFilter] = useState<'all' | 'audio' | 'mute'>('all');
   const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
   const [qualityFilter, setQualityFilter] = useState<'all' | 'hd'>('all');
-  const [minViewsFilter, setMinViewsFilter] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'relevance' | 'views' | 'likes' | 'duration_desc' | 'duration_asc'>('relevance');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
@@ -169,12 +206,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   const executeSearch = async (query: string, page = 1, append = false, sortOrder?: 'trending' | 'top' | 'latest') => {
     const term = query.trim() || 'trending';
     setShowSuggestions(false);
-
-    if (page === 1) {
-      setIsSearching(true);
-    } else {
-      setIsLoadingMore(true);
-    }
+    setIsSearching(true);
 
     try {
       let apiOrder: 'trending' | 'top' | 'latest' = 'trending';
@@ -193,6 +225,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
           return [...prev, ...newItems];
         });
       } else {
+        // En navegación por páginas, reemplaza los resultados completamente
         setSearchResults(res.items);
       }
 
@@ -207,8 +240,17 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       showToast('Error al conectar con el buscador de RedGIFs');
     } finally {
       setIsSearching(false);
-      setIsLoadingMore(false);
     }
+  };
+
+  const goToPage = (pageNumber: number) => {
+    if (pageNumber < 1 || pageNumber > totalPages || pageNumber === currentPage || isSearching) return;
+    const term = searchQuery.trim() || activeTag || 'trending';
+    executeSearch(term, pageNumber, false);
+    // Scroll suave a la cabecera de resultados
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -223,12 +265,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     setActiveTag(tag.query);
     setSearchQuery(tag.query);
     executeSearch(tag.query, 1, false);
-  };
-
-  const handleLoadMore = () => {
-    if (isLoadingMore || currentPage >= totalPages) return;
-    const term = searchQuery.trim() || activeTag || 'trending';
-    executeSearch(term, currentPage + 1, true);
   };
 
   // Insertar sugerencia en la barra de búsqueda o navegar al creador
@@ -290,11 +326,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       list = list.filter(item => Boolean(item.hd_url));
     }
 
-    // Filtro Vistas Mínimas
-    if (minViewsFilter > 0) {
-      list = list.filter(item => item.views >= minViewsFilter);
-    }
-
     // Filtro Audio
     if (audioFilter === 'audio') {
       list = list.filter(item => item.hasAudio === true);
@@ -323,7 +354,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     }
 
     return list;
-  }, [searchResults, audioFilter, durationFilter, qualityFilter, minViewsFilter, sortBy]);
+  }, [searchResults, audioFilter, durationFilter, qualityFilter, sortBy]);
 
   // Selección Múltiple
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
@@ -397,13 +428,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       {/* Hero & Buscador Principal */}
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5" /> BÚSQUEDA BOOLEANA & MULTI-TAG PRO
+          <Sparkles className="w-3.5 h-3.5" /> EXPLORADOR Y BUSCADOR PROFESIONAL
         </div>
         <h2 className="text-3xl sm:text-4xl font-black font-display tracking-tight text-white">
           Busca cualquier video en máxima resolución
         </h2>
         <p className="text-slate-400 text-xs sm:text-sm">
-          Combina etiquetas con <span className="text-emerald-400 font-bold">+</span>, excluye términos con <span className="text-red-400 font-bold">-</span> y filtra con autocompletado en tiempo real.
+          Busca términos en español o inglés, combina con <span className="text-emerald-400 font-bold">+</span>, excluye con <span className="text-red-400 font-bold">-</span> y navega página por página.
         </p>
 
         {/* Input de Búsqueda con Autocompletado */}
@@ -419,7 +450,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               onFocus={() => {
                 if (suggestions.length > 0) setShowSuggestions(true);
               }}
-              placeholder="Ejemplo: baile + fitness -compilacion..."
+              placeholder="Buscar por palabra clave, etiqueta o creador (ej. baile, fitness, playa)..."
               className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
             />
             {searchQuery && (
@@ -535,7 +566,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
         </div>
 
         {/* Desglose de Etiquetas Booleanas Activas */}
-        {(parsedActiveQuery.included.length > 1 || parsedActiveQuery.excluded.length > 0) && (
+        {parsedActiveQuery.hasExplicitBoolean && (parsedActiveQuery.included.length > 1 || parsedActiveQuery.excluded.length > 0) && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-xs">
             <span className="text-slate-400 font-bold mr-1">Filtros Activos:</span>
             {parsedActiveQuery.included.map((inc) => (
@@ -592,21 +623,51 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
         </div>
       </div>
 
-      {/* Barra de Filtros, Ordenación y Vista */}
+      {/* Referencia de anclaje para scroll al cambiar de página */}
+      <div ref={resultsRef} className="pt-2" />
+
+      {/* Barra de Filtros, Ordenación, Paginación Rápida y Vista */}
       <div className="bg-[#12141c] border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-slate-200">
-              {filteredResults.length} {filteredResults.length === 1 ? 'video' : 'videos'}
+              {filteredResults.length} {filteredResults.length === 1 ? 'video' : 'videos'} en página {currentPage}
             </span>
             {totalCount > 0 && (
               <span className="text-xs text-slate-400">
-                (de {totalCount.toLocaleString()} encontrados)
+                (de {totalCount.toLocaleString()} disponibles)
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Mini Paginador Rápido Superior */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1 bg-black/40 rounded-xl p-1 border border-white/10 text-xs">
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 1 || isSearching}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="Página anterior"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-2 text-slate-300 font-bold text-[11px]">
+                  Pág {currentPage} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages || isSearching}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  title="Página siguiente"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Toggle de Modo Selección */}
             <button
               type="button"
@@ -629,13 +690,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               type="button"
               onClick={() => setShowFilters(!showFilters)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-                showFilters || audioFilter !== 'all' || durationFilter !== 'all' || qualityFilter !== 'all' || minViewsFilter > 0 || sortBy !== 'relevance'
+                showFilters || audioFilter !== 'all' || durationFilter !== 'all' || qualityFilter !== 'all' || sortBy !== 'relevance'
                   ? 'bg-red-600/20 text-red-400 border-red-500/40'
                   : 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Filtros Pro {showFilters ? '▲' : '▼'}</span>
+              <span>Filtros {showFilters ? '▲' : '▼'}</span>
             </button>
 
             {/* Toggle Cuadrícula / Lista */}
@@ -660,12 +721,12 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
           </div>
         </div>
 
-        {/* Panel Desplegable de Filtros Avanzados */}
+        {/* Panel Desplegable de Filtros */}
         {showFilters && (
           <div className="pt-3 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             {/* Calidad Mínima */}
             <div className="space-y-1">
-              <span className="text-slate-400 font-semibold block">Calidad Mínima:</span>
+              <span className="text-slate-400 font-semibold block">Calidad:</span>
               <div className="flex rounded-lg bg-black/40 p-1 border border-white/10">
                 <button
                   type="button"
@@ -679,7 +740,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   onClick={() => setQualityFilter('hd')}
                   className={`flex-1 py-1 rounded text-center transition-colors font-bold cursor-pointer ${qualityFilter === 'hd' ? 'bg-red-600 text-white shadow-md' : 'text-slate-400'}`}
                 >
-                  Solo HD 1080p
+                  Solo HD
                 </button>
               </div>
             </div>
@@ -700,7 +761,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   onClick={() => setAudioFilter('audio')}
                   className={`flex-1 py-1 rounded text-center transition-colors flex items-center justify-center gap-1 cursor-pointer ${audioFilter === 'audio' ? 'bg-emerald-600/40 text-emerald-300 font-bold' : 'text-slate-400'}`}
                 >
-                  <Volume2 className="w-3 h-3" /> Con sonido
+                  <Volume2 className="w-3 h-3" /> Sonido
                 </button>
                 <button
                   type="button"
@@ -712,19 +773,32 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               </div>
             </div>
 
-            {/* Vistas Mínimas */}
+            {/* Duración */}
             <div className="space-y-1">
-              <span className="text-slate-400 font-semibold block">Popularidad (Vistas):</span>
-              <select
-                value={minViewsFilter}
-                onChange={(e) => setMinViewsFilter(Number(e.target.value))}
-                className="w-full bg-black/40 border border-white/10 text-slate-200 py-1.5 px-3 rounded-lg outline-none font-medium cursor-pointer"
-              >
-                <option value={0}>Cualquier cantidad</option>
-                <option value={1000}>Mínimo +1,000 vistas</option>
-                <option value={10000}>Mínimo +10,000 vistas</option>
-                <option value={50000}>Mínimo +50,000 vistas (Viral)</option>
-              </select>
+              <span className="text-slate-400 font-semibold block">Duración:</span>
+              <div className="flex rounded-lg bg-black/40 p-1 border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setDurationFilter('all')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'all' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFilter('short')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'short' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  &lt;15s
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFilter('long')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'long' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  &gt;30s
+                </button>
+              </div>
             </div>
 
             {/* Ordenación */}
@@ -732,11 +806,19 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <span className="text-slate-400 font-semibold block">Ordenar por:</span>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => {
+                  const newSort = e.target.value as any;
+                  setSortBy(newSort);
+                  if (newSort === 'views') {
+                    executeSearch(searchQuery || activeTag || 'trending', 1, false, 'top');
+                  } else {
+                    executeSearch(searchQuery || activeTag || 'trending', 1, false, 'trending');
+                  }
+                }}
                 className="w-full bg-black/40 border border-white/10 text-slate-200 py-1.5 px-3 rounded-lg outline-none font-medium cursor-pointer"
               >
-                <option value="relevance">Relevancia</option>
-                <option value="views">Más Vistos (Vistas)</option>
+                <option value="relevance">Relevancia / Tendencias</option>
+                <option value="views">Más Vistos (Top Vistas)</option>
                 <option value="likes">Más Valorados (Likes)</option>
                 <option value="duration_desc">Mayor Duración</option>
                 <option value="duration_asc">Menor Duración</option>
@@ -747,7 +829,20 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       </div>
 
       {/* Grid de Videos */}
-      {viewMode === 'grid' ? (
+      {isSearching ? (
+        <div className="py-24 text-center space-y-3">
+          <RefreshCw className="w-8 h-8 animate-spin text-red-500 mx-auto" />
+          <p className="text-slate-400 text-sm font-semibold">Cargando página {currentPage}...</p>
+        </div>
+      ) : filteredResults.length === 0 ? (
+        <div className="py-20 text-center space-y-3 bg-[#12141c] border border-white/10 rounded-2xl p-6">
+          <Search className="w-10 h-10 text-slate-600 mx-auto" />
+          <h3 className="text-base font-bold text-white">No se encontraron videos</h3>
+          <p className="text-slate-400 text-xs max-w-sm mx-auto">
+            Prueba a buscar con otra palabra clave o revisa los filtros aplicados.
+          </p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredResults.map((item) => {
             const isSelected = selectedIds.has(item.id);
@@ -1043,27 +1138,127 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
         </div>
       )}
 
-      {/* Botón Cargar Más Videos */}
-      {filteredResults.length > 0 && currentPage < totalPages && (
-        <div className="text-center pt-6">
-          <button
-            type="button"
-            onClick={handleLoadMore}
-            disabled={isLoadingMore}
-            className="bg-[#161a26] hover:bg-[#1e2333] border border-white/15 text-white font-bold px-8 py-3.5 rounded-2xl text-sm transition-all active:scale-95 shadow-lg shadow-black/40 disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
-          >
-            {isLoadingMore ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-red-500" />
-                <span>Cargando más videos...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-red-500" />
-                <span>Cargar 24 videos más (Página {currentPage + 1} de {totalPages})</span>
-              </>
+      {/* Barra de Paginación Completa e Independiente */}
+      {!isSearching && totalPages > 1 && (
+        <div className="bg-[#12141c] border border-white/10 rounded-2xl p-4 sm:p-5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4 mt-6">
+          {/* Info de página */}
+          <div className="text-xs text-slate-400 font-semibold text-center md:text-left">
+            <span>Página </span>
+            <span className="text-white font-black">{currentPage}</span>
+            <span> de </span>
+            <span className="text-white font-black">{totalPages.toLocaleString()}</span>
+            {totalCount > 0 && (
+              <span className="text-slate-500"> ({totalCount.toLocaleString()} videos en total)</span>
             )}
-          </button>
+          </div>
+
+          {/* Botones de Navegación Anterior / Números / Siguiente */}
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
+            {/* Primera Página */}
+            <button
+              type="button"
+              onClick={() => goToPage(1)}
+              disabled={currentPage <= 1 || isSearching}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 transition-all cursor-pointer"
+              title="Primera página"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+
+            {/* Anterior */}
+            <button
+              type="button"
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1 || isSearching}
+              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Anterior</span>
+            </button>
+
+            {/* Números de Página */}
+            <div className="flex items-center gap-1">
+              {getVisiblePageNumbers(currentPage, totalPages).map((p, idx) => {
+                if (p === '...') {
+                  return (
+                    <span key={`dots-${idx}`} className="px-2 text-slate-500 font-bold text-xs select-none">
+                      …
+                    </span>
+                  );
+                }
+                const pageNum = Number(p);
+                const isActive = pageNum === currentPage;
+                return (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => goToPage(pageNum)}
+                    disabled={isSearching}
+                    className={`min-w-[34px] h-[34px] rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg shadow-red-500/30 ring-2 ring-red-500/40'
+                        : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/5'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Siguiente */}
+            <button
+              type="button"
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages || isSearching}
+              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+            >
+              <span className="hidden sm:inline">Siguiente</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {/* Última Página */}
+            <button
+              type="button"
+              onClick={() => goToPage(totalPages)}
+              disabled={currentPage >= totalPages || isSearching}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed border border-white/5 transition-all cursor-pointer"
+              title="Última página"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Salto Directo a Página */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.currentTarget;
+              const input = form.elements.namedItem('pageJump') as HTMLInputElement;
+              const val = parseInt(input.value, 10);
+              if (!isNaN(val)) {
+                goToPage(Math.max(1, Math.min(totalPages, val)));
+                input.value = '';
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <span className="text-slate-400 hidden sm:inline">Ir a:</span>
+            <input
+              name="pageJump"
+              type="number"
+              min={1}
+              max={totalPages}
+              placeholder={String(currentPage)}
+              className="w-14 bg-black/50 border border-white/15 rounded-xl px-2 py-1.5 text-center text-white outline-none focus:border-red-500 font-bold"
+            />
+            <button
+              type="submit"
+              className="bg-white/10 hover:bg-white/20 text-white font-bold px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+            >
+              Ir
+            </button>
+          </form>
         </div>
       )}
 
