@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c162e"/>
+      <stop offset="50%" stop-color="#100d18"/>
+      <stop offset="100%" stop-color="#090a0f"/>
+    </linearGradient>
+    <linearGradient id="neonGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="45%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="glow512" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Fondo redondeado con borde moderno -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad512)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#neonGrad512)" stroke-width="7" stroke-opacity="0.6" />
+
+  <!-- Círculo interior brillante -->
+  <circle cx="256" cy="256" r="160" fill="url(#neonGrad512)" fill-opacity="0.1" />
+
+  <!-- Símbolo Play y Descarga -->
+  <g filter="url(#glow512)">
+    <path d="M208 160 L346 256 L208 352 Z" fill="url(#neonGrad512)" />
+    <path d="M216 385 L256 425 L296 385" fill="none" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />
+    <line x1="256" y1="340" x2="256" y2="420" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.95" />
+  </g>
+</svg>

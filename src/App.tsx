@@ -7,11 +7,13 @@ import { ExploreSearch } from './components/ExploreSearch';
 import { CreatorExplorer } from './components/CreatorExplorer';
 import { HistoryList } from './components/HistoryList';
 import { LightboxModal } from './components/LightboxModal';
+import { InstallPwaModal } from './components/InstallPwaModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
   const [selectedCreator, setSelectedCreator] = useState<string>('namiblossom');
   const [selectedTag, setSelectedTag] = useState<string>('');
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('rg_history') || '[]');
@@ -96,6 +98,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         historyCount={history.length}
+        onOpenInstallModal={() => setIsInstallModalOpen(true)}
       />
 
       {/* Contenido principal */}
@@ -165,6 +168,13 @@ export default function App() {
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
         onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
+      />
+
+      {/* Modal Instalación PWA */}
+      <InstallPwaModal
+        open={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+        showToast={showToast}
       />
 
       {/* Toast Notification */}
