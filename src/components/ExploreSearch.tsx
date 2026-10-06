@@ -41,12 +41,13 @@ import {
 } from '../services/redgifs';
 
 interface ExploreSearchProps {
-  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string) => void;
+  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string, originalItem?: SearchResultItem) => void;
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string) => void;
   showToast: (msg: string) => void;
   onSendToBatch?: (urls: string[]) => void;
   onSelectCreator?: (username: string) => void;
   initialTag?: string;
+  tagTimestamp?: number;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
 }
 
@@ -114,6 +115,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onSendToBatch,
   onSelectCreator,
   initialTag,
+  tagTimestamp,
   onOpenTheater
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialTag || '');
@@ -161,13 +163,17 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   // Carga inicial automática de tendencias o tag inicial
   useEffect(() => {
     if (initialTag) {
-      setSearchQuery(initialTag);
-      setActiveTag(initialTag);
-      executeSearch(initialTag, 1, false);
+      const cleanTag = initialTag.trim().replace(/^#/, '');
+      setSearchQuery(cleanTag);
+      setActiveTag(cleanTag);
+      executeSearch(cleanTag, 1, false);
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
     } else {
       executeSearch('trending', 1, false);
     }
-  }, [initialTag]);
+  }, [initialTag, tagTimestamp]);
 
   const handleSearchTag = (tag: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -919,7 +925,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     if (selectMode) {
                       toggleSelect(item.id);
                     } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
+                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -928,7 +934,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                       if (selectMode) {
                         toggleSelect(item.id);
                       } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
                       }
                     }
                   }}
@@ -1122,11 +1128,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <div
                     role="button"
                     tabIndex={0}
-                    onClick={() => onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName)}
+                    onClick={() => onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
                       }
                     }}
                     className="relative w-24 h-16 rounded-xl overflow-hidden bg-black shrink-0 cursor-pointer group"

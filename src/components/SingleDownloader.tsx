@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
-import { Download, Clipboard, X, Sparkles, Eye, Heart, AlertCircle, ExternalLink, Tag } from 'lucide-react';
-import { RedGifItem } from '../types';
+import { Download, Clipboard, X, Sparkles, Eye, Heart, AlertCircle, ExternalLink, Tag, Film } from 'lucide-react';
+import { RedGifItem, SearchResultItem } from '../types';
 import { getVideoInfo, downloadVideoFile, isIOS } from '../services/redgifs';
 
 interface SingleDownloaderProps {
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string, size_mb?: number) => void;
   showToast: (msg: string) => void;
   onSelectTag?: (tag: string) => void;
+  onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
 }
 
-export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDownload, showToast, onSelectTag }) => {
+export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
+  onSuccessDownload,
+  showToast,
+  onSelectTag,
+  onOpenTheater
+}) => {
   const [inputUrl, setInputUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -253,7 +259,7 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDow
                   type="button"
                   onClick={() => handleDownload('hd')}
                   disabled={progress.active}
-                  className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white font-bold p-3 rounded-xl text-center shadow-lg shadow-red-600/25 transition-transform duration-150 active:scale-95 disabled:opacity-50"
+                  className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white font-bold p-3 rounded-xl text-center shadow-lg shadow-red-600/25 transition-transform duration-150 active:scale-95 disabled:opacity-50 cursor-pointer"
                 >
                   <div className="text-sm font-extrabold flex items-center justify-center gap-1.5">
                     <Download className="w-4 h-4" /> Descargar HD
@@ -267,7 +273,7 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDow
                   type="button"
                   onClick={() => handleDownload('sd')}
                   disabled={progress.active}
-                  className="bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold p-3 rounded-xl text-center transition-colors duration-150 disabled:opacity-50"
+                  className="bg-white/10 hover:bg-white/15 border border-white/10 text-white font-bold p-3 rounded-xl text-center transition-colors duration-150 disabled:opacity-50 cursor-pointer"
                 >
                   <div className="text-sm font-extrabold flex items-center justify-center gap-1.5">
                     <Download className="w-4 h-4" /> Descargar SD
@@ -275,6 +281,35 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDow
                   <div className="text-[10px] text-slate-400 font-normal">Versión móvil ligera</div>
                 </button>
               </div>
+
+              {/* Botón Ver en Modo Feed Reels */}
+              {onOpenTheater && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const searchItem: SearchResultItem = {
+                      id: video.id,
+                      title: video.title,
+                      userName: video.userName,
+                      duration: video.duration,
+                      views: video.views,
+                      likes: video.likes,
+                      hasAudio: true,
+                      tags: video.tags,
+                      hd_url: video.hd_url,
+                      sd_url: video.sd_url,
+                      thumbnail_url: video.thumbnail_url,
+                      poster_url: video.poster_url,
+                      watch_url: video.watch_url
+                    };
+                    onOpenTheater([searchItem], 0);
+                  }}
+                  className="w-full bg-purple-600/20 hover:bg-purple-600/35 border border-purple-500/40 text-purple-200 hover:text-white py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-purple-600/20 active:scale-95"
+                >
+                  <Film className="w-4 h-4 text-purple-400" />
+                  <span>Ver en Modo Reels (Pantalla Completa)</span>
+                </button>
+              )}
 
               {/* Direct link for iPad / iOS */}
               <div className="space-y-2 pt-1">

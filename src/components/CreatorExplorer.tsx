@@ -38,11 +38,12 @@ import {
 } from '../services/redgifs';
 
 interface CreatorExplorerProps {
-  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string) => void;
+  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string, originalItem?: SearchResultItem) => void;
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string) => void;
   showToast: (msg: string) => void;
   onSendToBatch: (urls: string[]) => void;
   initialUsername?: string;
+  creatorTimestamp?: number;
   onSelectTag?: (tag: string) => void;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
 }
@@ -63,6 +64,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   showToast,
   onSendToBatch,
   initialUsername = 'namiblossom',
+  creatorTimestamp,
   onSelectTag,
   onOpenTheater
 }) => {
@@ -117,12 +119,15 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     localStorage.setItem('rg_recent_creators', JSON.stringify(updated));
   };
 
-  // Cargar creador inicial
+  // Cargar creador inicial o cuando cambia el timestamp
   useEffect(() => {
     if (initialUsername) {
-      loadCreator(initialUsername, order, 1, false);
+      const clean = initialUsername.trim().replace(/^@/, '');
+      setUsernameInput(clean);
+      setActiveUsername(clean);
+      loadCreator(clean, order, 1, false);
     }
-  }, [initialUsername]);
+  }, [initialUsername, creatorTimestamp]);
 
   const loadCreator = async (
     targetUser: string,
@@ -763,7 +768,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     if (selectMode) {
                       toggleSelect(item.id);
                     } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
+                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -772,7 +777,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                       if (selectMode) {
                         toggleSelect(item.id);
                       } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
                       }
                     }
                   }}

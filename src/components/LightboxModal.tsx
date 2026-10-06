@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Tag, User } from 'lucide-react';
+import { X, Tag, User, Film } from 'lucide-react';
 
 interface LightboxModalProps {
   open: boolean;
@@ -10,6 +10,7 @@ interface LightboxModalProps {
   onClose: () => void;
   onSelectTag?: (tag: string) => void;
   onSelectCreator?: (username: string) => void;
+  onOpenTheater?: () => void;
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({
@@ -20,7 +21,8 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   userName,
   onClose,
   onSelectTag,
-  onSelectCreator
+  onSelectCreator,
+  onOpenTheater
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -63,10 +65,10 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
                   onClose();
                   if (onSelectCreator) onSelectCreator(userName);
                 }}
-                className="text-purple-400 hover:text-purple-300 font-bold text-xs flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-500/20 shrink-0 cursor-pointer transition-colors"
+                className="text-purple-400 hover:text-purple-300 font-bold text-xs flex items-center gap-1 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 shrink-0 cursor-pointer transition-colors"
                 title={`Ver perfil de @${userName}`}
               >
-                <User className="w-3 h-3" />
+                <User className="w-3.5 h-3.5" />
                 <span>@{userName}</span>
               </button>
             )}
@@ -74,14 +76,29 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
               {title}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar reproductor"
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors duration-150 shrink-0 cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {onOpenTheater && (
+              <button
+                type="button"
+                onClick={onOpenTheater}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95 cursor-pointer"
+                title="Ver este video en pantalla completa estilo Reels"
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Modo Reels</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar reproductor"
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors duration-150 shrink-0 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Video */}

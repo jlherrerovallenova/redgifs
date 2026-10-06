@@ -29,6 +29,7 @@ interface TheaterFeedModalProps {
   open: boolean;
   videos: SearchResultItem[];
   initialIndex?: number;
+  isLoadingInitial?: boolean;
   onClose: () => void;
   onSelectTag?: (tag: string) => void;
   onSelectCreator?: (username: string) => void;
@@ -42,6 +43,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   open,
   videos,
   initialIndex = 0,
+  isLoadingInitial = false,
   onClose,
   onSelectTag,
   onSelectCreator,
@@ -436,7 +438,25 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
     videoRef.current.currentTime = Math.max(0, Math.min(duration, pos * duration));
   };
 
-  if (!open || !currentVideo) return null;
+  if (!open) return null;
+
+  if (isLoadingInitial || !currentVideo) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#050608] text-white flex flex-col items-center justify-center select-none overflow-hidden animate-fadeIn">
+        <div className="w-16 h-16 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 flex items-center justify-center shadow-2xl mb-4">
+          <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
+        </div>
+        <p className="text-sm font-bold text-slate-300">Cargando videos para el Feed Reels...</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-6 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+        >
+          Cancelar
+        </button>
+      </div>
+    );
+  }
 
   const currentLikes = (currentVideo.likes || 0) + (likeCountDelta[currentVideo.id] || 0);
 

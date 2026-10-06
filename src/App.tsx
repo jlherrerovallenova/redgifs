@@ -13,17 +13,25 @@ import { searchVideosExtended } from './services/redgifs';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
-  const [selectedCreator, setSelectedCreator] = useState<string>('namiblossom');
-  const [selectedTag, setSelectedTag] = useState<string>('');
+  const [selectedCreator, setSelectedCreator] = useState<{ username: string; timestamp: number }>({
+    username: 'namiblossom',
+    timestamp: Date.now()
+  });
+  const [selectedTag, setSelectedTag] = useState<{ tag: string; timestamp: number }>({
+    tag: '',
+    timestamp: 0
+  });
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [theaterState, setTheaterState] = useState<{
     open: boolean;
     videos: SearchResultItem[];
     startIndex: number;
+    isLoading?: boolean;
   }>({
     open: false,
     videos: [],
-    startIndex: 0
+    startIndex: 0,
+    isLoading: false
   });
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
@@ -39,6 +47,7 @@ export default function App() {
     title: string;
     tags?: string[];
     userName?: string;
+    originalItem?: SearchResultItem;
   }>({
     open: false,
     url: '',
@@ -57,41 +66,54 @@ export default function App() {
   const [prefilledBatchUrls, setPrefilledBatchUrls] = useState<string>('');
 
   const handleOpenCreator = (username: string) => {
-    setSelectedCreator(username);
+    const cleanUser = username.trim().replace(/^@/, '');
+    setSelectedCreator({ username: cleanUser, timestamp: Date.now() });
     setActiveTab('creators');
   };
 
   const handleOpenTag = (tag: string) => {
-    setSelectedTag(tag);
+    const cleanTag = tag.trim().replace(/^#/, '');
+    setSelectedTag({ tag: cleanTag, timestamp: Date.now() });
     setActiveTab('explore');
+    showToast(`Mostrando videos con etiqueta #${cleanTag}`);
   };
 
   const handleOpenTheater = (videos?: SearchResultItem[], startIndex = 0) => {
     if (videos && videos.length > 0) {
-      setTheaterState({ open: true, videos, startIndex });
+      setTheaterState({ open: true, videos, startIndex, isLoading: false });
     } else {
+      setTheaterState({ open: true, videos: [], startIndex: 0, isLoading: true });
       showToast('Cargando videos para el Feed Reels...');
       searchVideosExtended('trending', 24, 1)
         .then(res => {
           if (res.items.length > 0) {
-            setTheaterState({ open: true, videos: res.items, startIndex: 0 });
+            setTheaterState({ open: true, videos: res.items, startIndex: 0, isLoading: false });
           } else {
             showToast('No se encontraron videos');
+            setTheaterState(prev => ({ ...prev, open: false, isLoading: false }));
           }
         })
         .catch(() => {
           showToast('Error al cargar videos para el Feed');
+          setTheaterState(prev => ({ ...prev, open: false, isLoading: false }));
         });
     }
   };
 
-  const handleOpenLightbox = (url: string, title: string, tags?: string[], userName?: string) => {
+  const handleOpenLightbox = (
+    url: string,
+    title: string,
+    tags?: string[],
+    userName?: string,
+    originalItem?: SearchResultItem
+  ) => {
     setLightbox({
       open: true,
       url,
       title,
       tags: tags || [],
-      userName: userName || ''
+      userName: userName || '',
+      originalItem
     });
   };
 
@@ -139,6 +161,7 @@ export default function App() {
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
             onSelectTag={handleOpenTag}
+            onOpenTheater={handleOpenTheater}
           />
         )}
 
@@ -156,7 +179,8 @@ export default function App() {
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
             onSelectCreator={handleOpenCreator}
-            initialTag={selectedTag}
+            initialTag={selectedTag.tag}
+            tagTimestamp={selectedTag.timestamp}
             onOpenTheater={handleOpenTheater}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
@@ -171,7 +195,8 @@ export default function App() {
             onOpenLightbox={handleOpenLightbox}
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
-            initialUsername={selectedCreator}
+            initialUsername={selectedCreator.username}
+            creatorTimestamp={selectedCreator.timestamp}
             onSelectTag={handleOpenTag}
             onOpenTheater={handleOpenTheater}
             onSendToBatch={(urls) => {
@@ -200,6 +225,14 @@ export default function App() {
         userName={lightbox.userName}
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
+        onOpenTheater={
+          lightbox.originalItem
+            ? () => {
+                setLightbox({ open: false, url: '', title: '', tags: [], userName: '' });
+                handleOpenTheater([lightbox.originalItem!], 0);
+              }
+            : undefined
+        }
         onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
       />
 
@@ -208,7 +241,8 @@ export default function App() {
         open={theaterState.open}
         videos={theaterState.videos}
         initialIndex={theaterState.startIndex}
-        onClose={() => setTheaterState(prev => ({ ...prev, open: false }))}
+        isLoadingInitial={theaterState.isLoading}
+        onClose={() => setTheaterState(prev => ({ ...prev, open: false, isLoading: false }))}
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
         onSuccessDownload={handleSuccessDownload}
