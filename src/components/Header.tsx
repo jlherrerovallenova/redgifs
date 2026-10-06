@@ -1,16 +1,23 @@
 import React from 'react';
-import { Download, Layers, Search, History, User, Smartphone } from 'lucide-react';
+import { Download, Layers, Search, History, User, Smartphone, Sparkles, Film } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'single' | 'batch' | 'explore' | 'creators' | 'history';
   setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'creators' | 'history') => void;
   historyCount: number;
   onOpenInstallModal?: () => void;
+  onOpenTheater?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, historyCount, onOpenInstallModal }) => {
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  setActiveTab,
+  historyCount,
+  onOpenInstallModal,
+  onOpenTheater
+}) => {
   return (
-    <header className="sticky top-0 z-50 bg-[#090a0f]/90 backdrop-blur-md border-b border-white/10 px-4 py-3">
+    <header className="sticky top-0 z-40 bg-[#090a0f]/90 backdrop-blur-md border-b border-white/10 px-4 py-3">
       <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-pink-600 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-red-500/30">
@@ -78,6 +85,19 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, history
               )}
             </button>
           </nav>
+
+          {/* Botón Feed Continuo / Reels */}
+          {onOpenTheater && (
+            <button
+              type="button"
+              onClick={onOpenTheater}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95 cursor-pointer shrink-0"
+              title="Abrir modo Feed continuo / Reels a pantalla completa"
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Feed Reels</span>
+            </button>
+          )}
 
           {/* Botón de Instalación PWA */}
           {onOpenInstallModal && (

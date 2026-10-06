@@ -27,7 +27,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Film
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import {
@@ -46,6 +47,7 @@ interface ExploreSearchProps {
   onSendToBatch?: (urls: string[]) => void;
   onSelectCreator?: (username: string) => void;
   initialTag?: string;
+  onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
 }
 
 const POPULAR_TAGS = [
@@ -111,7 +113,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   showToast,
   onSendToBatch,
   onSelectCreator,
-  initialTag
+  initialTag,
+  onOpenTheater
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialTag || '');
   const [activeTag, setActiveTag] = useState<string>(initialTag || 'trending');
@@ -689,6 +692,19 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               </div>
             )}
 
+            {/* Botón Feed Continuo / Reels */}
+            {onOpenTheater && filteredResults.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onOpenTheater(filteredResults, 0)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white shadow-md shadow-red-500/20 active:scale-95 cursor-pointer"
+                title="Ver estos videos en modo Feed continuo / Reels"
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Feed Reels</span>
+              </button>
+            )}
+
             {/* Toggle de Modo Selección */}
             <button
               type="button"
@@ -1042,6 +1058,21 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                       <Download className="w-3.5 h-3.5" /> Descargar HD
                     </button>
 
+                    {onOpenTheater && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const idx = filteredResults.findIndex(r => r.id === item.id);
+                          onOpenTheater(filteredResults, idx >= 0 ? idx : 0);
+                        }}
+                        title="Ver en modo Feed / Reels continuo"
+                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                      >
+                        <Film className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={(e) => handleCopyLink(item, e)}
@@ -1160,6 +1191,19 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  {onOpenTheater && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idx = filteredResults.findIndex(r => r.id === item.id);
+                        onOpenTheater(filteredResults, idx >= 0 ? idx : 0);
+                      }}
+                      className="bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer"
+                      title="Ver en modo Feed continuo / Reels"
+                    >
+                      <Film className="w-3.5 h-3.5" /> Reels
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleDownload(item, 'hd')}

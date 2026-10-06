@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RedGifItem, HistoryItem } from './types';
+import { RedGifItem, HistoryItem, SearchResultItem } from './types';
 import { Header } from './components/Header';
 import { SingleDownloader } from './components/SingleDownloader';
 import { BatchDownloader } from './components/BatchDownloader';
@@ -8,12 +8,23 @@ import { CreatorExplorer } from './components/CreatorExplorer';
 import { HistoryList } from './components/HistoryList';
 import { LightboxModal } from './components/LightboxModal';
 import { InstallPwaModal } from './components/InstallPwaModal';
+import { TheaterFeedModal } from './components/TheaterFeedModal';
+import { searchVideosExtended } from './services/redgifs';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
   const [selectedCreator, setSelectedCreator] = useState<string>('namiblossom');
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [theaterState, setTheaterState] = useState<{
+    open: boolean;
+    videos: SearchResultItem[];
+    startIndex: number;
+  }>({
+    open: false,
+    videos: [],
+    startIndex: 0
+  });
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('rg_history') || '[]');
@@ -53,6 +64,25 @@ export default function App() {
   const handleOpenTag = (tag: string) => {
     setSelectedTag(tag);
     setActiveTab('explore');
+  };
+
+  const handleOpenTheater = (videos?: SearchResultItem[], startIndex = 0) => {
+    if (videos && videos.length > 0) {
+      setTheaterState({ open: true, videos, startIndex });
+    } else {
+      showToast('Cargando videos para el Feed Reels...');
+      searchVideosExtended('trending', 24, 1)
+        .then(res => {
+          if (res.items.length > 0) {
+            setTheaterState({ open: true, videos: res.items, startIndex: 0 });
+          } else {
+            showToast('No se encontraron videos');
+          }
+        })
+        .catch(() => {
+          showToast('Error al cargar videos para el Feed');
+        });
+    }
   };
 
   const handleOpenLightbox = (url: string, title: string, tags?: string[], userName?: string) => {
@@ -99,6 +129,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         historyCount={history.length}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
+        onOpenTheater={() => handleOpenTheater()}
       />
 
       {/* Contenido principal */}
@@ -126,6 +157,7 @@ export default function App() {
             showToast={showToast}
             onSelectCreator={handleOpenCreator}
             initialTag={selectedTag}
+            onOpenTheater={handleOpenTheater}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
@@ -141,6 +173,7 @@ export default function App() {
             showToast={showToast}
             initialUsername={selectedCreator}
             onSelectTag={handleOpenTag}
+            onOpenTheater={handleOpenTheater}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
@@ -168,6 +201,18 @@ export default function App() {
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
         onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
+      />
+
+      {/* Modal Feed Continuo / Reels (Modo Teatro) */}
+      <TheaterFeedModal
+        open={theaterState.open}
+        videos={theaterState.videos}
+        initialIndex={theaterState.startIndex}
+        onClose={() => setTheaterState(prev => ({ ...prev, open: false }))}
+        onSelectTag={handleOpenTag}
+        onSelectCreator={handleOpenCreator}
+        onSuccessDownload={handleSuccessDownload}
+        showToast={showToast}
       />
 
       {/* Modal Instalación PWA */}

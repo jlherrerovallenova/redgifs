@@ -26,7 +26,8 @@ import {
   X,
   Flame,
   TrendingUp,
-  Globe
+  Globe,
+  Film
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
@@ -43,6 +44,7 @@ interface CreatorExplorerProps {
   onSendToBatch: (urls: string[]) => void;
   initialUsername?: string;
   onSelectTag?: (tag: string) => void;
+  onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
 }
 
 const FEATURED_CREATORS = [
@@ -61,7 +63,8 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   showToast,
   onSendToBatch,
   initialUsername = 'namiblossom',
-  onSelectTag
+  onSelectTag,
+  onOpenTheater
 }) => {
   const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState(initialUsername);
@@ -621,6 +624,18 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
 
           {/* Acciones y Modo Selección */}
           <div className="flex items-center gap-2 flex-wrap">
+            {onOpenTheater && filteredVideos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onOpenTheater(filteredVideos, 0)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white shadow-md shadow-purple-600/30 active:scale-95 cursor-pointer"
+                title="Ver las publicaciones de este creador en Feed continuo"
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Feed Reels</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -871,6 +886,21 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     >
                       <Download className="w-3.5 h-3.5" /> Descargar HD
                     </button>
+
+                    {onOpenTheater && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const idx = filteredVideos.findIndex(r => r.id === item.id);
+                          onOpenTheater(filteredVideos, idx >= 0 ? idx : 0);
+                        }}
+                        title="Ver en modo Feed / Reels continuo"
+                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                      >
+                        <Film className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     <button
                       type="button"
