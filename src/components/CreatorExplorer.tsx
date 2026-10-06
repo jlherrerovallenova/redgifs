@@ -37,11 +37,12 @@ import {
 } from '../services/redgifs';
 
 interface CreatorExplorerProps {
-  onOpenLightbox: (url: string, title: string) => void;
+  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string) => void;
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string) => void;
   showToast: (msg: string) => void;
   onSendToBatch: (urls: string[]) => void;
   initialUsername?: string;
+  onSelectTag?: (tag: string) => void;
 }
 
 const FEATURED_CREATORS = [
@@ -59,7 +60,8 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   onSuccessDownload,
   showToast,
   onSendToBatch,
-  initialUsername = 'namiblossom'
+  initialUsername = 'namiblossom',
+  onSelectTag
 }) => {
   const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState(initialUsername);
@@ -746,7 +748,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     if (selectMode) {
                       toggleSelect(item.id);
                     } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title);
+                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -755,7 +757,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                       if (selectMode) {
                         toggleSelect(item.id);
                       } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
                       }
                     }
                   }}
@@ -828,6 +830,37 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     <h3 className="text-xs font-bold text-slate-200 line-clamp-2 leading-snug" title={item.title}>
                       {item.title}
                     </h3>
+
+                    {/* Tags interactivos */}
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1.5">
+                        {item.tags.slice(0, 4).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onSelectTag) {
+                                onSelectTag(t);
+                                showToast(`Buscando videos relacionados con #${t}...`);
+                              }
+                            }}
+                            className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-white px-2 py-0.5 rounded-md border border-purple-500/20 hover:border-purple-500/40 transition-all font-medium truncate max-w-[120px] cursor-pointer active:scale-95"
+                            title={`Ver videos relacionados con #${t}`}
+                          >
+                            #{t}
+                          </button>
+                        ))}
+                        {item.tags.length > 4 && (
+                          <span
+                            className="text-[10px] text-slate-500 px-1 py-0.5 self-center"
+                            title={item.tags.slice(4).map(t => `#${t}`).join(', ')}
+                          >
+                            +{item.tags.length - 4}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2 flex items-center gap-1.5 border-t border-white/5">

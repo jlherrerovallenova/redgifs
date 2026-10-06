@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Download, Clipboard, X, Sparkles, Eye, Heart, AlertCircle, ExternalLink } from 'lucide-react';
+import { Download, Clipboard, X, Sparkles, Eye, Heart, AlertCircle, ExternalLink, Tag } from 'lucide-react';
 import { RedGifItem } from '../types';
 import { getVideoInfo, downloadVideoFile, isIOS } from '../services/redgifs';
 
 interface SingleDownloaderProps {
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string, size_mb?: number) => void;
   showToast: (msg: string) => void;
+  onSelectTag?: (tag: string) => void;
 }
 
-export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDownload, showToast }) => {
+export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDownload, showToast, onSelectTag }) => {
   const [inputUrl, setInputUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -203,12 +204,29 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({ onSuccessDow
               </div>
 
               {video.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {video.tags.slice(0, 5).map(tag => (
-                    <span key={tag} className="text-[11px] bg-white/5 border border-white/5 text-slate-400 px-2 py-0.5 rounded">
-                      #{tag}
-                    </span>
-                  ))}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-red-400" />
+                    <span>Etiquetas (pulsa para ver videos relacionados):</span>
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {video.tags.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          if (onSelectTag) {
+                            onSelectTag(tag);
+                            showToast(`Buscando videos relacionados con #${tag}...`);
+                          }
+                        }}
+                        className="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 hover:text-white px-2.5 py-1 rounded-lg transition-all font-semibold flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                        title={`Buscar videos relacionados con #${tag}`}
+                      >
+                        <span>#{tag}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

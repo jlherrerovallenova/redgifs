@@ -11,6 +11,7 @@ import { LightboxModal } from './components/LightboxModal';
 export default function App() {
   const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
   const [selectedCreator, setSelectedCreator] = useState<string>('namiblossom');
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('rg_history') || '[]');
@@ -19,10 +20,18 @@ export default function App() {
     }
   });
 
-  const [lightbox, setLightbox] = useState<{ open: boolean; url: string; title: string }>({
+  const [lightbox, setLightbox] = useState<{
+    open: boolean;
+    url: string;
+    title: string;
+    tags?: string[];
+    userName?: string;
+  }>({
     open: false,
     url: '',
-    title: ''
+    title: '',
+    tags: [],
+    userName: ''
   });
 
   const [toast, setToast] = useState<string | null>(null);
@@ -37,6 +46,21 @@ export default function App() {
   const handleOpenCreator = (username: string) => {
     setSelectedCreator(username);
     setActiveTab('creators');
+  };
+
+  const handleOpenTag = (tag: string) => {
+    setSelectedTag(tag);
+    setActiveTab('explore');
+  };
+
+  const handleOpenLightbox = (url: string, title: string, tags?: string[], userName?: string) => {
+    setLightbox({
+      open: true,
+      url,
+      title,
+      tags: tags || [],
+      userName: userName || ''
+    });
   };
 
   const handleSuccessDownload = (video: RedGifItem, quality: string, filename: string, size_mb?: number) => {
@@ -80,6 +104,7 @@ export default function App() {
           <SingleDownloader
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
+            onSelectTag={handleOpenTag}
           />
         )}
 
@@ -93,10 +118,11 @@ export default function App() {
 
         {activeTab === 'explore' && (
           <ExploreSearch
-            onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
+            onOpenLightbox={handleOpenLightbox}
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
             onSelectCreator={handleOpenCreator}
+            initialTag={selectedTag}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
@@ -107,10 +133,11 @@ export default function App() {
 
         {activeTab === 'creators' && (
           <CreatorExplorer
-            onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
+            onOpenLightbox={handleOpenLightbox}
             onSuccessDownload={handleSuccessDownload}
             showToast={showToast}
             initialUsername={selectedCreator}
+            onSelectTag={handleOpenTag}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
@@ -123,7 +150,7 @@ export default function App() {
           <HistoryList
             history={history}
             onClearHistory={handleClearHistory}
-            onOpenLightbox={(url, title) => setLightbox({ open: true, url, title })}
+            onOpenLightbox={(url, title) => handleOpenLightbox(url, title, [])}
           />
         )}
       </main>
@@ -133,7 +160,11 @@ export default function App() {
         open={lightbox.open}
         url={lightbox.url}
         title={lightbox.title}
-        onClose={() => setLightbox({ open: false, url: '', title: '' })}
+        tags={lightbox.tags}
+        userName={lightbox.userName}
+        onSelectTag={handleOpenTag}
+        onSelectCreator={handleOpenCreator}
+        onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
       />
 
       {/* Toast Notification */}

@@ -40,11 +40,12 @@ import {
 } from '../services/redgifs';
 
 interface ExploreSearchProps {
-  onOpenLightbox: (url: string, title: string) => void;
+  onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string) => void;
   onSuccessDownload: (video: RedGifItem, quality: string, filename: string) => void;
   showToast: (msg: string) => void;
   onSendToBatch?: (urls: string[]) => void;
   onSelectCreator?: (username: string) => void;
+  initialTag?: string;
 }
 
 const POPULAR_TAGS = [
@@ -109,10 +110,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onSuccessDownload,
   showToast,
   onSendToBatch,
-  onSelectCreator
+  onSelectCreator,
+  initialTag
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTag, setActiveTag] = useState<string>('trending');
+  const [searchQuery, setSearchQuery] = useState(initialTag || '');
+  const [activeTag, setActiveTag] = useState<string>(initialTag || 'trending');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -153,10 +155,29 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Carga inicial automática de tendencias
+  // Carga inicial automática de tendencias o tag inicial
   useEffect(() => {
-    executeSearch('trending', 1, false);
-  }, []);
+    if (initialTag) {
+      setSearchQuery(initialTag);
+      setActiveTag(initialTag);
+      executeSearch(initialTag, 1, false);
+    } else {
+      executeSearch('trending', 1, false);
+    }
+  }, [initialTag]);
+
+  const handleSearchTag = (tag: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const cleanTag = tag.trim().replace(/^#/, '');
+    if (!cleanTag) return;
+    setSearchQuery(cleanTag);
+    setActiveTag(cleanTag);
+    showToast(`Mostrando videos relacionados con #${cleanTag}...`);
+    executeSearch(cleanTag, 1, false);
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
 
   // Autocompletado en vivo con debounce
   useEffect(() => {
@@ -882,7 +903,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     if (selectMode) {
                       toggleSelect(item.id);
                     } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title);
+                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -891,7 +912,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                       if (selectMode) {
                         toggleSelect(item.id);
                       } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
                       }
                     }
                   }}
@@ -988,20 +1009,25 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     {/* Tags interactivos */}
                     {item.tags && item.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 pt-1.5">
-                        {item.tags.slice(0, 2).map((t) => (
+                        {item.tags.slice(0, 4).map((t) => (
                           <button
                             key={t}
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSearchQuery(t);
-                              executeSearch(t, 1, false);
-                            }}
-                            className="text-[10px] bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded-md border border-white/5 transition-colors truncate max-w-[110px] cursor-pointer"
+                            onClick={(e) => handleSearchTag(t, e)}
+                            className="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-white px-2 py-0.5 rounded-md border border-red-500/20 hover:border-red-500/40 transition-all font-medium truncate max-w-[120px] cursor-pointer active:scale-95"
+                            title={`Ver videos relacionados con #${t}`}
                           >
                             #{t}
                           </button>
                         ))}
+                        {item.tags.length > 4 && (
+                          <span
+                            className="text-[10px] text-slate-500 px-1 py-0.5 self-center"
+                            title={item.tags.slice(4).map(t => `#${t}`).join(', ')}
+                          >
+                            +{item.tags.length - 4}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1043,16 +1069,16 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             return (
               <div
                 key={item.id}
-                className={`bg-[#12141c] border rounded-2xl p-3 flex items-center justify-between gap-3 transition-colors ${
+                className={`bg-[#12141c] border rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors ${
                   isSelected ? 'border-purple-500 bg-purple-950/20' : 'border-white/10 hover:border-white/20'
                 }`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-1 min-w-0 w-full sm:w-auto">
                   {selectMode && (
                     <button
                       type="button"
                       onClick={() => toggleSelect(item.id)}
-                      className="p-1 cursor-pointer"
+                      className="p-1 cursor-pointer shrink-0"
                     >
                       {isSelected ? (
                         <CheckSquare className="w-5 h-5 text-purple-400" />
@@ -1065,11 +1091,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <div
                     role="button"
                     tabIndex={0}
-                    onClick={() => onOpenLightbox(item.hd_url || item.sd_url, item.title)}
+                    onClick={() => onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title);
+                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName);
                       }
                     }}
                     className="relative w-24 h-16 rounded-xl overflow-hidden bg-black shrink-0 cursor-pointer group"
@@ -1089,7 +1115,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-bold text-white truncate">{item.title}</h3>
-                    <div className="flex items-center gap-3 text-xs text-slate-400 pt-0.5">
+                    <div className="flex items-center gap-3 text-xs text-slate-400 pt-0.5 flex-wrap">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1113,10 +1139,27 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                         </span>
                       )}
                     </div>
+
+                    {/* Tags en modo lista */}
+                    {item.tags && item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {item.tags.slice(0, 3).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={(e) => handleSearchTag(t, e)}
+                            className="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-white px-2 py-0.5 rounded-md border border-red-500/20 transition-colors truncate max-w-[110px] cursor-pointer"
+                            title={`Ver videos relacionados con #${t}`}
+                          >
+                            #{t}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                   <button
                     type="button"
                     onClick={() => handleDownload(item, 'hd')}
@@ -1126,7 +1169,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleCopyLink(item)}
+                    onClick={(e) => handleCopyLink(item, e)}
                     className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 cursor-pointer"
                   >
                     {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
