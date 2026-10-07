@@ -236,17 +236,21 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   // Carga inicial automática de tendencias o tag inicial
   useEffect(() => {
+    let timer: number | null = null;
     if (initialTag) {
       const cleanTag = initialTag.trim().replace(/^#/, '');
       setSearchQuery(cleanTag);
       setActiveTag(cleanTag);
       executeSearch(cleanTag, 1, false);
-      setTimeout(() => {
+      timer = window.setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 80);
     } else {
       executeSearch('trending', 1, false);
     }
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
   }, [initialTag, tagTimestamp]);
 
   const handleSearchTag = (tag: string, e?: React.MouseEvent) => {
@@ -550,6 +554,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             <input
               type="text"
               value={searchQuery}
+              aria-label="Buscar por palabra clave, etiqueta o creador"
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => {
                 if (suggestions.length > 0) setShowSuggestions(true);
@@ -565,6 +570,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   setSuggestions([]);
                   executeSearch('trending', 1, false);
                 }}
+                aria-label="Limpiar término de búsqueda"
                 className="p-2 text-slate-400 hover:text-white transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -573,6 +579,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             <button
               type="submit"
               disabled={isSearching}
+              aria-label="Ejecutar búsqueda de videos"
               className="bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
             >
               {isSearching ? (
@@ -593,11 +600,12 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 <span className="text-[10px] text-slate-500">Pulsa para autocompletar</span>
               </div>
               <div className="max-h-60 overflow-y-auto divide-y divide-white/5">
-                {suggestions.map((s, idx) => (
+                {suggestions.map((s) => (
                   <button
-                    key={idx}
+                    key={`${s.type}-${s.text}`}
                     type="button"
                     onClick={() => handleSelectSuggestion(s)}
+                    aria-label={`Sugerencia ${s.text}`}
                     className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/10 text-slate-200 hover:text-white transition-colors cursor-pointer text-xs"
                   >
                     <div className="flex items-center gap-2">
@@ -694,6 +702,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 <button
                   type="button"
                   onClick={() => removeQueryToken(inc, false)}
+                  aria-label={`Eliminar filtro +${inc}`}
                   className="hover:text-emerald-100 cursor-pointer ml-1"
                 >
                   ×
@@ -709,6 +718,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 <button
                   type="button"
                   onClick={() => removeQueryToken(exc, true)}
+                  aria-label={`Eliminar filtro -${exc}`}
                   className="hover:text-red-100 cursor-pointer ml-1"
                 >
                   ×
@@ -957,6 +967,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <span className="text-slate-400 font-semibold block">Ordenar por:</span>
               <select
                 value={sortBy}
+                aria-label="Criterio de ordenación"
                 onChange={(e) => {
                   const newSort = e.target.value as any;
                   setSortBy(newSort);
@@ -1015,6 +1026,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <button
                     type="button"
                     onClick={(e) => toggleSelect(item.id, e)}
+                    aria-label={isSelected ? 'Deseleccionar video' : 'Seleccionar video'}
                     className="absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-xl bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
                   >
                     {isSelected ? (
@@ -1246,6 +1258,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     <button
                       type="button"
                       onClick={() => toggleSelect(item.id)}
+                      aria-label={isSelected ? 'Deseleccionar video' : 'Seleccionar video'}
                       className="p-1 cursor-pointer shrink-0"
                     >
                       {isSelected ? (
@@ -1351,6 +1364,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <button
                     type="button"
                     onClick={(e) => handleCopyLink(item, e)}
+                    aria-label="Copiar enlace del video"
                     className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 cursor-pointer"
                   >
                     {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}

@@ -44,7 +44,10 @@ export default async function handler(req: any, res: any) {
     const data = await upstream.text();
 
     res.setHeader('Content-Type', contentType);
-    return res.status(upstream.status).send(data);
+    if (!upstream.ok) {
+      return res.status(upstream.status).send(data);
+    }
+    return res.status(200).send(data);
   } catch (err: any) {
     return res.status(502).json({ error: 'Fallo al conectar con RedGIFs', message: err.message });
   }

@@ -628,13 +628,15 @@ export async function searchCreators(query: string, count = 12): Promise<UserPro
  */
 export async function fetchTopCreatorVideoUrls(username: string, limit: number = 20): Promise<string[]> {
   const resultUrls: string[] = [];
+  const seenUrls = new Set<string>();
   let page = 1;
   while (resultUrls.length < limit) {
     const countNeeded = Math.min(30, limit - resultUrls.length);
     const feed = await getCreatorFeed(username, 'best', countNeeded, page);
     if (!feed.items || feed.items.length === 0) break;
     for (const item of feed.items) {
-      if (!resultUrls.includes(item.watch_url)) {
+      if (!seenUrls.has(item.watch_url)) {
+        seenUrls.add(item.watch_url);
         resultUrls.push(item.watch_url);
       }
       if (resultUrls.length >= limit) break;

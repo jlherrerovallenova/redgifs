@@ -368,6 +368,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
           <input
             type="text"
             value={usernameInput}
+            aria-label="Nombre del creador a explorar"
             onChange={(e) => setUsernameInput(e.target.value)}
             placeholder="Introduce el nombre del creador (ej. namiblossom, brazzers, ersties)..."
             className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
@@ -376,6 +377,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
             <button
               type="button"
               onClick={() => setUsernameInput('')}
+              aria-label="Limpiar nombre del creador"
               className="p-2 text-slate-400 hover:text-white transition-colors"
             >
               <X className="w-4 h-4" />
@@ -384,6 +386,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
           <button
             type="submit"
             disabled={isLoading}
+            aria-label="Explorar perfil del creador"
             className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
           >
             {isLoading ? (
@@ -425,31 +428,29 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
           <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs">
             <span className="text-slate-500 font-medium mr-1">Buscados:</span>
             {recentCreators.map((name) => (
-              <button
+              <div
                 key={name}
-                type="button"
-                onClick={() => {
-                  setUsernameInput(name);
-                  loadCreator(name, order, 1, false);
-                }}
                 className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2.5 py-0.5 rounded-lg border border-white/10 flex items-center gap-1 transition-colors"
               >
-                <span>@{name}</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => removeRecentCreator(name, e)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      removeRecentCreator(name, e as any);
-                    }
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsernameInput(name);
+                    loadCreator(name, order, 1, false);
                   }}
-                  className="hover:text-red-400 cursor-pointer ml-0.5"
+                  className="cursor-pointer font-medium hover:text-white"
+                >
+                  @{name}
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => removeRecentCreator(name, e)}
+                  aria-label={`Eliminar @${name} del historial`}
+                  className="hover:text-red-400 cursor-pointer ml-0.5 text-slate-400 hover:text-white px-1"
                 >
                   ×
-                </span>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -510,9 +511,9 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
 
             {/* Enlaces Externos / Redes Sociales / SimpCity */}
             <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto pt-2 lg:pt-0">
-              {profile.socialLinks && profile.socialLinks.map((link, idx) => (
+              {profile.socialLinks && profile.socialLinks.map((link) => (
                 <a
-                  key={idx}
+                  key={`${link.type}-${link.url}`}
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -833,6 +834,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                   <button
                     type="button"
                     onClick={(e) => toggleSelect(item.id, e)}
+                    aria-label={isSelected ? 'Deseleccionar video' : 'Seleccionar video'}
                     className="absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-xl bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
                   >
                     {isSelected ? (

@@ -593,6 +593,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
                 min={0}
                 max={duration || 100}
                 step={0.1}
+                aria-label="Posición de reproducción"
                 value={currentTime}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
@@ -657,6 +658,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
                     min={0}
                     max={1}
                     step={0.05}
+                    aria-label="Nivel de volumen"
                     value={isMuted ? 0 : volume}
                     onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                     className="w-14 sm:w-18 h-1 bg-white/30 accent-emerald-500 rounded-full cursor-pointer transition-all"
@@ -784,9 +786,18 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
               {similarVideos.map((item) => (
                 <div
                   key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Ver video similar de @${item.userName}`}
                   onClick={() => {
                     if (onSwitchVideo) {
                       onSwitchVideo(item);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (onSwitchVideo) onSwitchVideo(item);
                     }
                   }}
                   className="group relative aspect-[16/10] rounded-xl overflow-hidden bg-black border border-white/10 hover:border-pink-500/50 cursor-pointer transition-all hover:scale-[1.02]"

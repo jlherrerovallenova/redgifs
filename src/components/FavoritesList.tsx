@@ -353,6 +353,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                 <input
                   type="text"
                   value={searchQuery}
+                  aria-label="Buscar en favoritos por título, creador o etiqueta"
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar en tus favoritos por título, creador o etiqueta..."
                   className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-pink-500/50"
@@ -361,6 +362,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
+                    aria-label="Limpiar búsqueda en favoritos"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs"
                   >
                     ×
@@ -398,6 +400,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                 {/* Ordenación */}
                 <select
                   value={sortBy}
+                  aria-label="Criterio de ordenación de favoritos"
                   onChange={(e) => setSortBy(e.target.value as any)}
                   className="bg-black/40 border border-white/10 text-slate-300 text-xs py-1.5 px-3 rounded-xl outline-none font-medium cursor-pointer shrink-0"
                 >

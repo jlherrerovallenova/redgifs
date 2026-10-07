@@ -820,10 +820,12 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           )}
 
           {/* Tap/Click Area for Play/Pause & Double-tap Like */}
-          <div
+          <button
+            type="button"
+            aria-label="Tocar para pausar o reproducir video"
             onClick={togglePlay}
             onDoubleClick={handleDoubleTap}
-            className="absolute inset-0 z-20 cursor-pointer"
+            className="absolute inset-0 z-20 cursor-pointer bg-transparent border-none p-0 outline-none w-full h-full"
             title="Toca para pausar/reproducir o doble tap para me gusta"
           />
 
@@ -951,6 +953,15 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
                   aria-valuemin={0}
                   aria-valuemax={100}
                   onClick={handleSeek}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowRight') {
+                      e.preventDefault();
+                      jumpTime(5);
+                    } else if (e.key === 'ArrowLeft') {
+                      e.preventDefault();
+                      jumpTime(-5);
+                    }
+                  }}
                   className="flex-1 h-2 bg-white/20 hover:h-3 rounded-full overflow-hidden cursor-pointer transition-all relative"
                 >
                   <div

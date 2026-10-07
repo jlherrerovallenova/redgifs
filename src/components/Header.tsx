@@ -41,7 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenTheater}
-                className="flex items-center gap-1 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white px-2.5 py-1 rounded-full text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                aria-label="Abrir Feed Reels"
+                className="flex items-center gap-1 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white px-2.5 py-1 rounded-full text-xs font-bold transition-transform active:scale-95 cursor-pointer"
               >
                 <Film className="w-3.5 h-3.5" />
                 <span>Reels</span>
@@ -51,7 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenInstallModal}
-                className="p-1.5 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30"
+                aria-label="Instalar aplicación en dispositivo"
+                className="p-1.5 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30 transition-colors hover:bg-purple-600/30"
                 title="Instalar App"
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -135,7 +137,8 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenTheater}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95 cursor-pointer shrink-0"
+                aria-label="Abrir modo Feed continuo / Reels a pantalla completa"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-md shadow-red-500/20 cursor-pointer shrink-0"
                 title="Abrir modo Feed continuo / Reels a pantalla completa"
               >
                 <Film className="w-3.5 h-3.5" />
@@ -147,7 +150,8 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenInstallModal}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 text-purple-300 border border-purple-500/30 hover:border-purple-400 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+                aria-label="Instalar RedGIFs Pro en dispositivo"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 text-purple-300 border border-purple-500/30 hover:border-purple-400 px-3 py-1.5 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-sm cursor-pointer shrink-0"
                 title="Instalar RedGIFs Pro en tu iPad, iPhone o PC"
               >
                 <Smartphone className="w-3.5 h-3.5 text-purple-400" />
