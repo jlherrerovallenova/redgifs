@@ -20,7 +20,13 @@ import {
   Loader2,
   AlertCircle,
   Repeat,
-  ArrowRight
+  ArrowRight,
+  Camera,
+  RotateCcw,
+  RotateCw,
+  Gauge,
+  FlipHorizontal2,
+  PictureInPicture2
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import { getVideoInfo, downloadVideoFile, isIOS } from '../services/redgifs';
@@ -40,6 +46,8 @@ interface TheaterFeedModalProps {
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
 }
+
+const SPEED_OPTIONS = [0.5, 1.0, 1.5, 2.0];
 
 export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   open,
@@ -63,6 +71,10 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [videoSrcFallback, setVideoSrcFallback] = useState<string | null>(null);
+  const [qualityMode, setQualityMode] = useState<'hd' | 'sd'>('hd');
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
 
   const [isLiked, setIsLiked] = useState<Record<string, boolean>>({});
   const [likeCountDelta, setLikeCountDelta] = useState<Record<string, number>>({});
@@ -72,8 +84,9 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [showCenterIcon, setShowCenterIcon] = useState<'play' | 'pause' | null>(null);
+  const [showCenterIcon, setShowCenterIcon] = useState<{ icon: 'play' | 'pause' | 'camera' | 'speed' | 'flip' | 'seek', text?: string } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,6 +114,10 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       setIsPlaying(true);
       setVideoError(null);
       setVideoSrcFallback(null);
+      setQualityMode('hd');
+      setPlaybackSpeed(1.0);
+      setIsFlipped(false);
+      setShowSpeedMenu(false);
     }
   }, [open, initialIndex, videos.length]);
 
@@ -109,7 +126,12 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   const prevVideo = videos[currentIndex - 1] || null;
 
   // Determine current active video source URL
-  const activeVideoUrl = videoSrcFallback || (currentVideo ? (currentVideo.hd_url || currentVideo.sd_url) : '');
+  const activeVideoUrl = videoSrcFallback || (currentVideo ? (qualityMode === 'sd' && currentVideo.sd_url ? currentVideo.sd_url : (currentVideo.hd_url || currentVideo.sd_url)) : '');
+
+  const triggerFeedback = (icon: 'play' | 'pause' | 'camera' | 'speed' | 'flip' | 'seek', text?: string) => {
+    setShowCenterIcon({ icon, text });
+    setTimeout(() => setShowCenterIcon(null), 650);
+  };
 
   // Go next
   const goToNext = useCallback(() => {
@@ -120,6 +142,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       setVideoError(null);
       setVideoSrcFallback(null);
       setProgress(0);
+      setShowSpeedMenu(false);
 
       // Auto load more if near end
       if (currentIndex >= videos.length - 3 && hasMore && onLoadMore) {
@@ -139,6 +162,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       setVideoError(null);
       setVideoSrcFallback(null);
       setProgress(0);
+      setShowSpeedMenu(false);
     }
   }, [currentIndex]);
 
@@ -154,6 +178,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
 
     video.currentTime = 0;
     video.muted = isMuted;
+    video.playbackRate = playbackSpeed;
 
     // Try playing
     const promise = video.play();
@@ -196,23 +221,30 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       if (p !== undefined) {
         p.then(() => {
           setIsPlaying(true);
-          setShowCenterIcon('play');
+          triggerFeedback('play');
         }).catch(() => {
           video.muted = true;
           setIsMuted(true);
           video.play().then(() => {
             setIsPlaying(true);
-            setShowCenterIcon('play');
+            triggerFeedback('play');
           }).catch(() => {});
         });
       }
     } else {
       video.pause();
       setIsPlaying(false);
-      setShowCenterIcon('pause');
+      triggerFeedback('pause');
     }
+  }, []);
 
-    setTimeout(() => setShowCenterIcon(null), 500);
+  // Jump Time (-5s / +5s)
+  const jumpTime = useCallback((seconds: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const newTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + seconds));
+    video.currentTime = newTime;
+    triggerFeedback('seek', `${seconds > 0 ? '+' : ''}${seconds}s`);
   }, []);
 
   // Handle Mute toggle
@@ -225,6 +257,76 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
     if (!newMuted && video.paused) {
       video.play().catch(() => {});
       setIsPlaying(true);
+    }
+  };
+
+  // Playback speed
+  const handleSetSpeed = (speed: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = speed;
+    setPlaybackSpeed(speed);
+    setShowSpeedMenu(false);
+    triggerFeedback('speed', `${speed}x`);
+    showToast(`Velocidad: ${speed}x`);
+  };
+
+  // Flip Horizontal
+  const toggleFlip = () => {
+    setIsFlipped(prev => !prev);
+    triggerFeedback('flip', !isFlipped ? 'Espejo ON' : 'Espejo OFF');
+    showToast(!isFlipped ? 'Modo Espejo activado' : 'Modo normal restaurado');
+  };
+
+  // Picture in Picture
+  const togglePiP = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        showToast('Saliste de Picture-in-Picture');
+      } else if (document.pictureInPictureEnabled) {
+        await video.requestPictureInPicture();
+        showToast('Modo Picture-in-Picture activado');
+      }
+    } catch (err: any) {
+      showToast(`PiP no soportado: ${err.message}`);
+    }
+  };
+
+  // Frame Capture / Snapshot HD
+  const handleSnapshot = () => {
+    const video = videoRef.current;
+    if (!video || !currentVideo) return;
+    setIsCapturing(true);
+    triggerFeedback('camera', 'Captura HD');
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        if (isFlipped) {
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/png');
+        const filename = `snapshot_${currentVideo.userName}_${Math.floor(video.currentTime)}s.png`;
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast(`📸 Captura HD guardada: ${filename}`);
+      }
+    } catch (e: any) {
+      showToast(`Error en captura: ${e.message || 'CORS'}`);
+    } finally {
+      setIsCapturing(false);
     }
   };
 
@@ -356,6 +458,14 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           e.preventDefault();
           goToPrev();
           break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          jumpTime(-5);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          jumpTime(5);
+          break;
         case ' ':
           e.preventDefault();
           togglePlay();
@@ -375,6 +485,33 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           e.preventDefault();
           handleDownloadHD();
           break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          handleSnapshot();
+          break;
+        case 'r':
+        case 'R':
+          e.preventDefault();
+          toggleFlip();
+          break;
+        case 'p':
+        case 'P':
+          e.preventDefault();
+          togglePiP();
+          break;
+        case '1':
+          handleSetSpeed(0.5);
+          break;
+        case '2':
+          handleSetSpeed(1.0);
+          break;
+        case '3':
+          handleSetSpeed(1.5);
+          break;
+        case '4':
+          handleSetSpeed(2.0);
+          break;
         case 'Escape':
           e.preventDefault();
           onClose();
@@ -384,7 +521,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, goToNext, goToPrev, togglePlay, onClose, isMuted, downloading]);
+  }, [open, goToNext, goToPrev, jumpTime, togglePlay, onClose, isMuted, isFlipped, downloading]);
 
   // Debounced Wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -498,12 +635,12 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       )}
 
       {/* Top Bar Header */}
-      <div className="absolute top-0 left-0 right-0 z-40 p-4 sm:p-5 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/50 to-transparent">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-bold shadow-lg">
+      <div className="absolute top-0 left-0 right-0 z-40 p-3 sm:p-5 flex items-center justify-between bg-gradient-to-b from-black/90 via-black/50 to-transparent">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-xs font-bold shadow-lg">
             <Sparkles className="w-3.5 h-3.5 text-red-400 animate-pulse" />
             <span className="bg-gradient-to-r from-red-400 via-pink-400 to-purple-400 bg-clip-text text-transparent font-extrabold">
-              Modo Feed Reels
+              Feed Reels Ultra-Pro
             </span>
           </div>
 
@@ -512,7 +649,66 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Toggle Velocidad */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+              className={`px-2.5 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1 transition-all cursor-pointer backdrop-blur-md ${
+                playbackSpeed !== 1.0
+                  ? 'bg-yellow-600/80 border-yellow-400 text-white shadow-lg'
+                  : 'bg-black/60 border-white/10 text-slate-300 hover:text-white'
+              }`}
+              title="Velocidad de reproducción (1-4)"
+            >
+              <Gauge className="w-3.5 h-3.5" />
+              <span>{playbackSpeed}x</span>
+            </button>
+
+            {showSpeedMenu && (
+              <div className="absolute top-full right-0 mt-2 bg-[#12141c] border border-white/15 rounded-xl shadow-2xl p-1.5 min-w-[90px] flex flex-col gap-0.5 z-50 animate-fadeIn">
+                {SPEED_OPTIONS.map((sp) => (
+                  <button
+                    key={sp}
+                    type="button"
+                    onClick={() => handleSetSpeed(sp)}
+                    className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center justify-between cursor-pointer transition-colors ${
+                      playbackSpeed === sp ? 'bg-red-600 text-white font-bold' : 'text-slate-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{sp}x</span>
+                    {playbackSpeed === sp && <Check className="w-3 h-3" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Toggle Espejo */}
+          <button
+            type="button"
+            onClick={toggleFlip}
+            className={`p-2 rounded-full border transition-all cursor-pointer backdrop-blur-md ${
+              isFlipped
+                ? 'bg-purple-600/80 border-purple-400 text-white shadow-lg'
+                : 'bg-black/60 border-white/10 text-slate-300 hover:text-white'
+            }`}
+            title="Modo Espejo (R)"
+          >
+            <FlipHorizontal2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Toggle Picture-in-Picture */}
+          <button
+            type="button"
+            onClick={togglePiP}
+            className="p-2 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-slate-300 hover:text-white hover:bg-white/15 transition-all cursor-pointer hidden sm:flex"
+            title="Picture-in-Picture (P)"
+          >
+            <PictureInPicture2 className="w-3.5 h-3.5" />
+          </button>
+
           {/* Toggle Auto-advance vs Loop */}
           <button
             type="button"
@@ -581,7 +777,9 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
               }}
               onCanPlay={() => setIsLoading(false)}
               onError={handleVideoError}
-              className="w-full h-full object-contain bg-black"
+              className={`w-full h-full object-contain bg-black transition-transform duration-200 ${
+                isFlipped ? 'scale-x-[-1]' : ''
+              }`}
             />
           )}
 
@@ -636,14 +834,18 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
             </div>
           )}
 
-          {/* Play / Pause Center Icon Feedback */}
+          {/* Play / Pause / Camera Center Icon Feedback */}
           {showCenterIcon && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-scaleUp">
-              <div className="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-2xl">
-                {showCenterIcon === 'play' ? (
-                  <Play className="w-8 h-8 fill-white ml-1 text-white" />
-                ) : (
-                  <Pause className="w-8 h-8 fill-white text-white" />
+              <div className="px-5 py-3 rounded-2xl bg-black/85 backdrop-blur-md border border-white/20 flex items-center gap-2 text-white shadow-2xl">
+                {showCenterIcon.icon === 'play' && <Play className="w-8 h-8 fill-white ml-1 text-white" />}
+                {showCenterIcon.icon === 'pause' && <Pause className="w-8 h-8 fill-white text-white" />}
+                {showCenterIcon.icon === 'camera' && <Camera className="w-7 h-7 text-yellow-400" />}
+                {showCenterIcon.icon === 'speed' && <Gauge className="w-7 h-7 text-yellow-400" />}
+                {showCenterIcon.icon === 'flip' && <FlipHorizontal2 className="w-7 h-7 text-purple-400" />}
+                {showCenterIcon.icon === 'seek' && <RotateCw className="w-7 h-7 text-red-400" />}
+                {showCenterIcon.text && (
+                  <span className="text-xs font-black tracking-wider">{showCenterIcon.text}</span>
                 )}
               </div>
             </div>
@@ -729,22 +931,42 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
               </div>
             )}
 
-            {/* Interactive Progress Bar */}
-            <div className="pt-2 space-y-1">
-              <div
-                role="slider"
-                tabIndex={0}
-                aria-label="Barra de reproducción de video"
-                aria-valuenow={progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                onClick={handleSeek}
-                className="w-full h-2 bg-white/20 hover:h-3 rounded-full overflow-hidden cursor-pointer transition-all relative"
-              >
+            {/* Interactive Progress Bar with -5s / +5s Buttons */}
+            <div className="pt-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => jumpTime(-5)}
+                  className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                  title="Retroceder 5s (←)"
+                >
+                  <RotateCcw className="w-3 h-3" /> -5s
+                </button>
+
                 <div
-                  className="bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 h-full rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
+                  role="slider"
+                  tabIndex={0}
+                  aria-label="Barra de reproducción de video"
+                  aria-valuenow={progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  onClick={handleSeek}
+                  className="flex-1 h-2 bg-white/20 hover:h-3 rounded-full overflow-hidden cursor-pointer transition-all relative"
+                >
+                  <div
+                    className="bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 h-full rounded-full transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => jumpTime(5)}
+                  className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[10px] font-bold flex items-center gap-0.5 cursor-pointer"
+                  title="Adelantar 5s (→)"
+                >
+                  +5s <RotateCw className="w-3 h-3" />
+                </button>
               </div>
 
               <div className="flex justify-between text-[11px] text-slate-300 font-mono font-medium">
@@ -756,12 +978,12 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
         </div>
 
         {/* Floating Side Action Bar (TikTok / Reels Style) */}
-        <div className="absolute right-4 sm:right-6 bottom-24 sm:bottom-28 z-40 flex flex-col items-center gap-3">
+        <div className="absolute right-3 sm:right-6 bottom-24 sm:bottom-28 z-40 flex flex-col items-center gap-2.5 sm:gap-3">
           {/* Like / Favorite Button */}
           <button
             type="button"
             onClick={toggleLike}
-            className={`w-12 h-12 rounded-full flex flex-col items-center justify-center border transition-all active:scale-90 cursor-pointer shadow-2xl ${
+            className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex flex-col items-center justify-center border transition-all active:scale-90 cursor-pointer shadow-2xl ${
               (isFavorite ? isFavorite(currentVideo.id) : isLiked[currentVideo.id])
                 ? 'bg-pink-600 text-white border-pink-400 shadow-pink-600/40 scale-105'
                 : 'bg-black/75 backdrop-blur-md text-white border-white/20 hover:bg-white/20'
@@ -772,11 +994,23 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
             <span className="text-[9px] font-bold mt-0.5">{currentLikes}</span>
           </button>
 
+          {/* Snapshot HD Frame Button */}
+          <button
+            type="button"
+            onClick={handleSnapshot}
+            disabled={isCapturing}
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-yellow-400 hover:bg-white/20 flex flex-col items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl"
+            title="Tomar Captura de Fotograma HD (C / S)"
+          >
+            <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-[8px] font-bold text-slate-200">Foto</span>
+          </button>
+
           {/* Sound Toggle */}
           <button
             type="button"
             onClick={toggleMute}
-            className="w-12 h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl"
             title={isMuted ? 'Activar sonido (M)' : 'Silenciar (M)'}
           >
             {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5 text-emerald-400" />}
@@ -787,14 +1021,14 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
             type="button"
             onClick={handleDownloadHD}
             disabled={downloading}
-            className="w-12 h-12 rounded-full bg-gradient-to-tr from-red-600 to-pink-600 hover:opacity-90 disabled:opacity-50 text-white border border-red-400/50 flex flex-col items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl shadow-red-600/30"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-red-600 to-pink-600 hover:opacity-90 disabled:opacity-50 text-white border border-red-400/50 flex flex-col items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl shadow-red-600/30"
             title="Descargar HD (D)"
           >
             {downloading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
               <>
-                <Download className="w-5 h-5" />
+                <Download className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="text-[8px] font-black">HD</span>
               </>
             )}
@@ -804,7 +1038,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           <button
             type="button"
             onClick={handleCopyLink}
-            className="w-12 h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl"
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-2xl"
             title="Copiar enlace"
           >
             {copiedId === currentVideo.id ? (
@@ -820,7 +1054,7 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
               href={currentVideo.hd_url || currentVideo.sd_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-12 h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-purple-300 hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 shadow-2xl"
+              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black/75 backdrop-blur-md border border-white/20 text-purple-300 hover:bg-white/20 flex items-center justify-center transition-transform active:scale-90 shadow-2xl"
               title="Abrir enlace MP4 directo"
             >
               <ExternalLink className="w-5 h-5" />
@@ -853,16 +1087,18 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       </div>
 
       {/* Bottom Shortcuts Info for Desktop */}
-      <div className="absolute bottom-3 left-6 hidden lg:flex items-center gap-3 text-[11px] text-slate-300 bg-black/70 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 shadow-lg z-40">
-        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">↑</kbd> <kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">↓</kbd> Navegar</span>
+      <div className="absolute bottom-3 left-6 hidden lg:flex items-center gap-2.5 text-[11px] text-slate-300 bg-black/70 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 shadow-lg z-40 font-mono">
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">↑</kbd> <kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">↓</kbd> Navegar</span>
         <span>•</span>
-        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">Espacio</kbd> Pausar</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">←</kbd> <kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">→</kbd> ±5s</span>
         <span>•</span>
-        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">M</kbd> Audio</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">C</kbd> Captura HD</span>
         <span>•</span>
-        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">D</kbd> Descarga HD</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">R</kbd> Espejo</span>
         <span>•</span>
-        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded font-mono text-white">Doble clic</kbd> Like</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">M</kbd> Audio</span>
+        <span>•</span>
+        <span><kbd className="px-1.5 py-0.5 bg-white/15 rounded text-white">1-4</kbd> Velocidad</span>
       </div>
     </div>
   );

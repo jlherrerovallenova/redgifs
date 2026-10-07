@@ -296,6 +296,18 @@ export default function App() {
         isFavorite={isFavorite}
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
+        showToast={showToast}
+        onSuccessDownload={handleSuccessDownload}
+        onSwitchVideo={(item) => {
+          setLightbox({
+            open: true,
+            url: item.hd_url || item.sd_url,
+            title: item.title,
+            tags: item.tags,
+            userName: item.userName,
+            originalItem: item
+          });
+        }}
         onOpenTheater={
           lightbox.originalItem
             ? () => {
