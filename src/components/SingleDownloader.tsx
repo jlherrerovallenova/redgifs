@@ -8,13 +8,17 @@ interface SingleDownloaderProps {
   showToast: (msg: string) => void;
   onSelectTag?: (tag: string) => void;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
+  onToggleFavorite?: (video: SearchResultItem) => void;
+  isFavorite?: (id: string) => boolean;
 }
 
 export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
   onSuccessDownload,
   showToast,
   onSelectTag,
-  onOpenTheater
+  onOpenTheater,
+  onToggleFavorite,
+  isFavorite
 }) => {
   const [inputUrl, setInputUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -200,13 +204,51 @@ export const SingleDownloader: React.FC<SingleDownloaderProps> = ({
 
               <h3 className="font-bold text-lg leading-snug line-clamp-2">{video.title}</h3>
 
-              <div className="flex items-center gap-4 text-xs text-slate-400">
-                <span className="flex items-center gap-1">
-                  <Eye className="w-3.5 h-3.5" /> {video.views.toLocaleString()} vistas
-                </span>
-                <span className="flex items-center gap-1">
-                  <Heart className="w-3.5 h-3.5 text-pink-400" /> {video.likes.toLocaleString()}
-                </span>
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center gap-4">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5" /> {video.views.toLocaleString()} vistas
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Heart className="w-3.5 h-3.5 text-pink-400" /> {video.likes.toLocaleString()}
+                  </span>
+                </div>
+
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const searchItem: SearchResultItem = {
+                        id: video.id,
+                        title: video.title,
+                        userName: video.userName,
+                        duration: video.duration,
+                        views: video.views,
+                        likes: video.likes,
+                        hasAudio: true,
+                        tags: video.tags,
+                        hd_url: video.hd_url,
+                        sd_url: video.sd_url,
+                        thumbnail_url: video.thumbnail_url,
+                        poster_url: video.poster_url,
+                        watch_url: video.watch_url
+                      };
+                      onToggleFavorite(searchItem);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      isFavorite && isFavorite(video.id)
+                        ? 'bg-pink-600/25 border-pink-500/40 text-pink-300'
+                        : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-pink-300 border-white/10'
+                    }`}
+                  >
+                    <Heart
+                      className={`w-3.5 h-3.5 ${
+                        isFavorite && isFavorite(video.id) ? 'fill-pink-500 text-pink-500' : ''
+                      }`}
+                    />
+                    <span>{isFavorite && isFavorite(video.id) ? 'En Favoritos' : 'Añadir a Favoritos'}</span>
+                  </button>
+                )}
               </div>
 
               {video.tags.length > 0 && (

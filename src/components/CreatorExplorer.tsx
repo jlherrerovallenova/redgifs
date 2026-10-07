@@ -46,6 +46,8 @@ interface CreatorExplorerProps {
   creatorTimestamp?: number;
   onSelectTag?: (tag: string) => void;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
+  onToggleFavorite?: (video: SearchResultItem) => void;
+  isFavorite?: (id: string) => boolean;
 }
 
 const FEATURED_CREATORS = [
@@ -66,7 +68,9 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   initialUsername = 'namiblossom',
   creatorTimestamp,
   onSelectTag,
-  onOpenTheater
+  onOpenTheater,
+  onToggleFavorite,
+  isFavorite
 }) => {
   const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState(initialUsername);
@@ -117,6 +121,36 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     const updated = recentCreators.filter(c => c !== name);
     setRecentCreators(updated);
     localStorage.setItem('rg_recent_creators', JSON.stringify(updated));
+  };
+
+  const openInAlohaBrowser = (query: string, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const targetUrl = `https://simpcity.cr/search/search?keywords=${encodeURIComponent(query)}`;
+    const isAndroid = /android/i.test(navigator.userAgent);
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+      // Intent directo para paquete de Aloha Browser en Android con fallback
+      const alohaIntent = `intent://simpcity.cr/search/search?keywords=${encodeURIComponent(query)}#Intent;scheme=https;package=com.aloha.browser;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
+      window.location.href = alohaIntent;
+    } else if (isIOS) {
+      // Protocolo deep-link de Aloha en iOS
+      window.location.href = `alohabrowser://open_link?link=${encodeURIComponent(targetUrl)}`;
+      setTimeout(() => {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }, 1500);
+    } else {
+      // En Windows / Escritorio: intenta esquema alohabrowser:// o abre la URL
+      try {
+        window.location.href = `alohabrowser://open_link?link=${encodeURIComponent(targetUrl)}`;
+      } catch {
+        // fallback
+      }
+      setTimeout(() => {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }, 600);
+    }
+    showToast(`Abriendo búsqueda en Aloha Browser...`);
   };
 
   // Cargar creador inicial o cuando cambia el timestamp
@@ -473,6 +507,18 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                   <ExternalLink className="w-3 h-3 text-slate-500" />
                 </a>
               ))}
+              <a
+                href={`https://simpcity.cr/search/search?keywords=${encodeURIComponent(profile.name || profile.username)}`}
+                onClick={(e) => openInAlohaBrowser(profile.name || profile.username, e)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Buscar ${profile.name || profile.username} en SimpCity (Aloha Browser)`}
+                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/10 hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5 text-amber-400" />
+                <span>Buscar en SimpCity (Aloha)</span>
+                <ExternalLink className="w-3 h-3 text-amber-400/70" />
+              </a>
               <a
                 href={profile.url}
                 target="_blank"
@@ -891,6 +937,28 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     >
                       <Download className="w-3.5 h-3.5" /> Descargar HD
                     </button>
+
+                    {onToggleFavorite && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite(item);
+                        }}
+                        title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
+                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                          isFavorite && isFavorite(item.id)
+                            ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
+                            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
+                        }`}
+                      >
+                        <Heart
+                          className={`w-3.5 h-3.5 ${
+                            isFavorite && isFavorite(item.id) ? 'fill-pink-500 text-pink-500' : ''
+                          }`}
+                        />
+                      </button>
+                    )}
 
                     {onOpenTheater && (
                       <button

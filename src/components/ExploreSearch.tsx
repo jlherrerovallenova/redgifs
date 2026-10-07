@@ -49,6 +49,8 @@ interface ExploreSearchProps {
   initialTag?: string;
   tagTimestamp?: number;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
+  onToggleFavorite?: (video: SearchResultItem) => void;
+  isFavorite?: (id: string) => boolean;
 }
 
 const POPULAR_TAGS = [
@@ -116,7 +118,9 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onSelectCreator,
   initialTag,
   tagTimestamp,
-  onOpenTheater
+  onOpenTheater,
+  onToggleFavorite,
+  isFavorite
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialTag || '');
   const [activeTag, setActiveTag] = useState<string>(initialTag || 'trending');
@@ -1063,6 +1067,28 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     >
                       <Download className="w-3.5 h-3.5" /> Descargar HD
                     </button>
+
+                    {onToggleFavorite && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite(item);
+                        }}
+                        title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
+                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                          isFavorite && isFavorite(item.id)
+                            ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
+                            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
+                        }`}
+                      >
+                        <Heart
+                          className={`w-3.5 h-3.5 ${
+                            isFavorite && isFavorite(item.id) ? 'fill-pink-500 text-pink-500' : ''
+                          }`}
+                        />
+                      </button>
+                    )}
 
                     {onOpenTheater && (
                       <button

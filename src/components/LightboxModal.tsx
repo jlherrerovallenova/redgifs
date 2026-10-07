@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Tag, User, Film } from 'lucide-react';
+import { X, Tag, User, Film, Heart } from 'lucide-react';
+import { SearchResultItem } from '../types';
 
 interface LightboxModalProps {
   open: boolean;
@@ -7,10 +8,13 @@ interface LightboxModalProps {
   title: string;
   tags?: string[];
   userName?: string;
+  originalItem?: SearchResultItem;
   onClose: () => void;
   onSelectTag?: (tag: string) => void;
   onSelectCreator?: (username: string) => void;
   onOpenTheater?: () => void;
+  onToggleFavorite?: (video: SearchResultItem) => void;
+  isFavorite?: (id: string) => boolean;
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({
@@ -19,10 +23,13 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   title,
   tags = [],
   userName,
+  originalItem,
   onClose,
   onSelectTag,
   onSelectCreator,
-  onOpenTheater
+  onOpenTheater,
+  onToggleFavorite,
+  isFavorite
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -78,6 +85,28 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {originalItem && onToggleFavorite && (
+              <button
+                type="button"
+                onClick={() => onToggleFavorite(originalItem)}
+                className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-xs font-semibold cursor-pointer ${
+                  isFavorite && isFavorite(originalItem.id)
+                    ? 'bg-pink-600/20 border-pink-500/40 text-pink-400'
+                    : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
+                }`}
+                title={isFavorite && isFavorite(originalItem.id) ? 'Quitar de favoritos' : 'Añadir a favoritos'}
+              >
+                <Heart
+                  className={`w-4 h-4 ${
+                    isFavorite && isFavorite(originalItem.id) ? 'fill-pink-500 text-pink-500' : ''
+                  }`}
+                />
+                <span className="hidden sm:inline">
+                  {isFavorite && isFavorite(originalItem.id) ? 'Guardado' : 'Favorito'}
+                </span>
+              </button>
+            )}
+
             {onOpenTheater && (
               <button
                 type="button"

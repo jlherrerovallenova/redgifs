@@ -5,6 +5,7 @@ import { SingleDownloader } from './components/SingleDownloader';
 import { BatchDownloader } from './components/BatchDownloader';
 import { ExploreSearch } from './components/ExploreSearch';
 import { CreatorExplorer } from './components/CreatorExplorer';
+import { FavoritesList } from './components/FavoritesList';
 import { HistoryList } from './components/HistoryList';
 import { LightboxModal } from './components/LightboxModal';
 import { InstallPwaModal } from './components/InstallPwaModal';
@@ -12,7 +13,7 @@ import { TheaterFeedModal } from './components/TheaterFeedModal';
 import { searchVideosExtended } from './services/redgifs';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'history'>('single');
+  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history'>('single');
   const [selectedCreator, setSelectedCreator] = useState<{ username: string; timestamp: number }>({
     username: 'namiblossom',
     timestamp: Date.now()
@@ -36,6 +37,14 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>(() => {
     try {
       return JSON.parse(localStorage.getItem('rg_history') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const [favorites, setFavorites] = useState<SearchResultItem[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('rg_favorites') || '[]');
     } catch {
       return [];
     }
@@ -139,6 +148,38 @@ export default function App() {
     showToast('Historial vaciado');
   };
 
+  const handleToggleFavorite = (video: SearchResultItem) => {
+    const exists = favorites.some(f => f.id === video.id);
+    let updated: SearchResultItem[];
+    if (exists) {
+      updated = favorites.filter(f => f.id !== video.id);
+      showToast('Eliminado de favoritos');
+    } else {
+      updated = [video, ...favorites.filter(f => f.id !== video.id)];
+      showToast('¡Añadido a favoritos! ❤️');
+    }
+    setFavorites(updated);
+    localStorage.setItem('rg_favorites', JSON.stringify(updated));
+  };
+
+  const isFavorite = (id: string): boolean => {
+    return favorites.some(f => f.id === id);
+  };
+
+  const handleImportFavorites = (imported: SearchResultItem[]) => {
+    const existingIds = new Set(favorites.map(f => f.id));
+    const newItems = imported.filter(item => item && item.id && !existingIds.has(item.id));
+    const combined = [...newItems, ...favorites];
+    setFavorites(combined);
+    localStorage.setItem('rg_favorites', JSON.stringify(combined));
+  };
+
+  const handleClearFavorites = () => {
+    setFavorites([]);
+    localStorage.removeItem('rg_favorites');
+    showToast('Lista de favoritos vaciada');
+  };
+
   return (
     <div className="min-h-screen bg-[#090a0f] text-slate-100 relative overflow-x-hidden">
       {/* Luces de ambiente */}
@@ -150,6 +191,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         historyCount={history.length}
+        favoritesCount={favorites.length}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenTheater={() => handleOpenTheater()}
       />
@@ -162,6 +204,8 @@ export default function App() {
             showToast={showToast}
             onSelectTag={handleOpenTag}
             onOpenTheater={handleOpenTheater}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
           />
         )}
 
@@ -182,6 +226,8 @@ export default function App() {
             initialTag={selectedTag.tag}
             tagTimestamp={selectedTag.timestamp}
             onOpenTheater={handleOpenTheater}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
@@ -199,11 +245,33 @@ export default function App() {
             creatorTimestamp={selectedCreator.timestamp}
             onSelectTag={handleOpenTag}
             onOpenTheater={handleOpenTheater}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
             onSendToBatch={(urls) => {
               setPrefilledBatchUrls(urls.join('\n'));
               setActiveTab('batch');
               showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
             }}
+          />
+        )}
+
+        {activeTab === 'favorites' && (
+          <FavoritesList
+            favorites={favorites}
+            onToggleFavorite={handleToggleFavorite}
+            onOpenLightbox={handleOpenLightbox}
+            onOpenTheater={handleOpenTheater}
+            onSelectCreator={handleOpenCreator}
+            onSelectTag={handleOpenTag}
+            onSendToBatch={(urls) => {
+              setPrefilledBatchUrls(urls.join('\n'));
+              setActiveTab('batch');
+              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+            }}
+            onSuccessDownload={handleSuccessDownload}
+            onImportFavorites={handleImportFavorites}
+            onClearFavorites={handleClearFavorites}
+            showToast={showToast}
           />
         )}
 
@@ -223,6 +291,9 @@ export default function App() {
         title={lightbox.title}
         tags={lightbox.tags}
         userName={lightbox.userName}
+        originalItem={lightbox.originalItem}
+        onToggleFavorite={handleToggleFavorite}
+        isFavorite={isFavorite}
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
         onOpenTheater={
@@ -246,6 +317,8 @@ export default function App() {
         onSelectTag={handleOpenTag}
         onSelectCreator={handleOpenCreator}
         onSuccessDownload={handleSuccessDownload}
+        onToggleFavorite={handleToggleFavorite}
+        isFavorite={isFavorite}
         showToast={showToast}
       />
 

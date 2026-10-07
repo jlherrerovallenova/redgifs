@@ -1,10 +1,11 @@
 import React from 'react';
-import { Download, Layers, Search, History, User, Smartphone, Sparkles, Film } from 'lucide-react';
+import { Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'single' | 'batch' | 'explore' | 'creators' | 'history';
-  setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'creators' | 'history') => void;
+  activeTab: 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
+  setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history') => void;
   historyCount: number;
+  favoritesCount?: number;
   onOpenInstallModal?: () => void;
   onOpenTheater?: () => void;
 }
@@ -13,6 +14,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
   historyCount,
+  favoritesCount = 0,
   onOpenInstallModal,
   onOpenTheater
 }) => {
@@ -69,6 +71,20 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             >
               <User className="w-4 h-4" /> Creadores
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('favorites')}
+              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+                activeTab === 'favorites' ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md shadow-pink-600/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${favoritesCount > 0 ? 'text-pink-400 fill-pink-500/40' : ''}`} /> Favoritos
+              {favoritesCount > 0 && (
+                <span className="bg-pink-500/20 text-pink-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                  {favoritesCount}
+                </span>
+              )}
             </button>
             <button
               type="button"

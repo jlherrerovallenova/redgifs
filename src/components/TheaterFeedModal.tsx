@@ -37,6 +37,8 @@ interface TheaterFeedModalProps {
   showToast: (msg: string) => void;
   onLoadMore?: () => void;
   hasMore?: boolean;
+  onToggleFavorite?: (video: SearchResultItem) => void;
+  isFavorite?: (id: string) => boolean;
 }
 
 export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
@@ -50,7 +52,9 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   onSuccessDownload,
   showToast,
   onLoadMore,
-  hasMore = false
+  hasMore = false,
+  onToggleFavorite,
+  isFavorite
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -240,12 +244,17 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
 
   const toggleLike = () => {
     if (!currentVideo) return;
-    const current = !!isLiked[currentVideo.id];
-    setIsLiked(prev => ({ ...prev, [currentVideo.id]: !current }));
+    const isFav = isFavorite ? isFavorite(currentVideo.id) : !!isLiked[currentVideo.id];
+    setIsLiked(prev => ({ ...prev, [currentVideo.id]: !isFav }));
     setLikeCountDelta(prev => ({
       ...prev,
-      [currentVideo.id]: (prev[currentVideo.id] || 0) + (current ? -1 : 1)
+      [currentVideo.id]: (prev[currentVideo.id] || 0) + (isFav ? -1 : 1)
     }));
+    if (onToggleFavorite) {
+      onToggleFavorite(currentVideo);
+    } else {
+      showToast(isFav ? 'Eliminado de favoritos' : '¡Añadido a favoritos! ❤️');
+    }
   };
 
   // Video error handling & source fallback
@@ -748,18 +757,18 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
 
         {/* Floating Side Action Bar (TikTok / Reels Style) */}
         <div className="absolute right-4 sm:right-6 bottom-24 sm:bottom-28 z-40 flex flex-col items-center gap-3">
-          {/* Like Button */}
+          {/* Like / Favorite Button */}
           <button
             type="button"
             onClick={toggleLike}
             className={`w-12 h-12 rounded-full flex flex-col items-center justify-center border transition-all active:scale-90 cursor-pointer shadow-2xl ${
-              isLiked[currentVideo.id]
+              (isFavorite ? isFavorite(currentVideo.id) : isLiked[currentVideo.id])
                 ? 'bg-pink-600 text-white border-pink-400 shadow-pink-600/40 scale-105'
                 : 'bg-black/75 backdrop-blur-md text-white border-white/20 hover:bg-white/20'
             }`}
-            title="Me gusta (Doble tap en video)"
+            title="Me gusta / Guardar en Favoritos (Doble tap en video)"
           >
-            <Heart className={`w-5 h-5 ${isLiked[currentVideo.id] ? 'fill-white' : ''}`} />
+            <Heart className={`w-5 h-5 ${(isFavorite ? isFavorite(currentVideo.id) : isLiked[currentVideo.id]) ? 'fill-white' : ''}`} />
             <span className="text-[9px] font-bold mt-0.5">{currentLikes}</span>
           </button>
 
