@@ -424,12 +424,12 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
 
       {/* Banner y Tarjeta de Perfil de Creador */}
       {profile && (
-        <div className="bg-gradient-to-b from-[#161424] via-[#12141c] to-[#12141c] border border-purple-500/30 rounded-3xl p-5 sm:p-7 shadow-2xl shadow-purple-950/40 space-y-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-            <div className="flex items-center gap-4">
+        <div className="bg-gradient-to-b from-[#161424] via-[#12141c] to-[#12141c] border border-purple-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-7 shadow-2xl shadow-purple-950/40 space-y-5 sm:space-y-6 w-full max-w-full overflow-hidden">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-5 w-full">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 max-w-full flex-1">
               {/* Avatar con Anillo Glow */}
               <div className="relative shrink-0">
-                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-black/60 border-2 border-purple-500/50 shadow-xl shadow-purple-600/20 flex items-center justify-center">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-black/60 border-2 border-purple-500/50 shadow-xl shadow-purple-600/20 flex items-center justify-center">
                   {profile.profileImageUrl ? (
                     <img
                       src={profile.profileImageUrl}
@@ -437,57 +437,57 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-10 h-10 text-purple-400" />
+                    <User className="w-8 h-8 sm:w-10 sm:h-10 text-purple-400" />
                   )}
                 </div>
                 {profile.verified && (
-                  <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white p-1 rounded-full shadow-md shadow-blue-500/50" title="Creador Verificado">
-                    <CheckCircle2 className="w-4 h-4 fill-blue-500 text-white" />
+                  <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white p-0.5 sm:p-1 rounded-full shadow-md shadow-blue-500/50" title="Creador Verificado">
+                    <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-blue-500 text-white" />
                   </div>
                 )}
               </div>
 
               {/* Datos y Badges */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xl sm:text-2xl font-black font-display text-white">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <h3 className="text-lg sm:text-2xl font-black font-display text-white truncate max-w-full">
                     {profile.name || profile.username}
                   </h3>
                   {profile.verified && (
-                    <span className="bg-blue-500/20 border border-blue-500/40 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> VERIFICADO
+                    <span className="bg-blue-500/20 border border-blue-500/40 text-blue-400 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                      <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> VERIFICADO
                     </span>
                   )}
                   {profile.studio && (
-                    <span className="bg-purple-500/20 border border-purple-500/40 text-purple-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Tv className="w-3 h-3" /> ESTUDIO
+                    <span className="bg-purple-500/20 border border-purple-500/40 text-purple-400 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                      <Tv className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> ESTUDIO
                     </span>
                   )}
                 </div>
-                <div className="text-purple-400 text-sm font-semibold">
+                <div className="text-purple-400 text-xs sm:text-sm font-semibold truncate">
                   @{profile.username}
                 </div>
                 {profile.description && (
-                  <p className="text-xs sm:text-sm text-slate-300 max-w-xl line-clamp-2 leading-relaxed pt-1">
+                  <p className="text-xs sm:text-sm text-slate-300 max-w-xl line-clamp-2 leading-relaxed pt-0.5">
                     {profile.description}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Enlaces Externos / Redes Sociales */}
-            <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* Enlaces Externos / Redes Sociales / SimpCity */}
+            <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto pt-2 lg:pt-0">
               {profile.socialLinks && profile.socialLinks.map((link, idx) => (
                 <a
                   key={idx}
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2.5 sm:px-3 py-1.5 rounded-xl border border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
                 >
-                  <Globe className="w-3.5 h-3.5 text-purple-400" />
+                  <Globe className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                   <span>{link.type}</span>
-                  <ExternalLink className="w-3 h-3 text-slate-500" />
+                  <ExternalLink className="w-3 h-3 text-slate-500 shrink-0" />
                 </a>
               ))}
               <a
@@ -496,10 +496,11 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={`Buscar ${profile.name || profile.username} en SimpCity`}
-                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/10 hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/10 active:scale-95 cursor-pointer shrink-0"
               >
                 <Search className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span>Buscar en SimpCity</span>
+                <span className="sm:hidden">SimpCity</span>
+                <span className="hidden sm:inline">Buscar en SimpCity</span>
                 <ExternalLink className="w-3 h-3 text-amber-400/70 shrink-0" />
               </a>
               <a
@@ -508,7 +509,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                 rel="noopener noreferrer"
                 className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 px-3 py-1.5 rounded-xl border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
               >
-                <span>Ver en RedGIFs</span>
+                <span>RedGIFs</span>
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               </a>
             </div>
