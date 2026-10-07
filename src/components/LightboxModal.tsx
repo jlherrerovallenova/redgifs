@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { X, Tag, User, Film, Heart } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Tag, User, Film, Heart, Sparkles, Play, Eye } from 'lucide-react';
 import { SearchResultItem } from '../types';
+import { searchVideosExtended } from '../services/redgifs';
 
 interface LightboxModalProps {
   open: boolean;
@@ -15,6 +16,7 @@ interface LightboxModalProps {
   onOpenTheater?: () => void;
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
+  onSwitchVideo?: (item: SearchResultItem) => void;
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({
@@ -29,9 +31,28 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   onSelectCreator,
   onOpenTheater,
   onToggleFavorite,
-  isFavorite
+  isFavorite,
+  onSwitchVideo
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const [similarVideos, setSimilarVideos] = useState<SearchResultItem[]>([]);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
+
+  useEffect(() => {
+    if (open && (tags.length > 0 || userName)) {
+      setLoadingSimilar(true);
+      const query = tags[0] || userName || 'trending';
+      searchVideosExtended(query, 6, 1)
+        .then(res => {
+          const filtered = res.items.filter(item => item.id !== originalItem?.id).slice(0, 4);
+          setSimilarVideos(filtered);
+        })
+        .catch(() => setSimilarVideos([]))
+        .finally(() => setLoadingSimilar(false));
+    } else {
+      setSimilarVideos([]);
+    }
+  }, [open, url, tags, userName, originalItem?.id]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -142,6 +163,44 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
             className="w-full max-h-[65vh] object-contain bg-black"
           />
         </div>
+
+        {/* Sección de Videos Similares y Recomendados */}
+        {similarVideos.length > 0 && (
+          <div className="p-3 border-t border-white/10 bg-[#0a0b10] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                <span>Recomendados para ti:</span>
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {similarVideos.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    if (onSwitchVideo) {
+                      onSwitchVideo(item);
+                    }
+                  }}
+                  className="group relative aspect-[16/10] rounded-xl overflow-hidden bg-black border border-white/10 hover:border-pink-500/50 cursor-pointer transition-all hover:scale-[1.02]"
+                >
+                  <img
+                    src={item.thumbnail_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Play className="w-5 h-5 text-white fill-white" />
+                  </div>
+                  <div className="absolute bottom-1 left-1.5 right-1.5 flex items-center justify-between text-[9px] text-white bg-black/70 backdrop-blur-sm px-1.5 py-0.5 rounded">
+                    <span className="truncate max-w-[70px]">@{item.userName}</span>
+                    <span>{item.duration}s</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Footer con Etiquetas Interactivas */}
         {tags && tags.length > 0 && (

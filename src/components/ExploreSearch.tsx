@@ -110,6 +110,39 @@ function getVisiblePageNumbers(current: number, total: number, maxVisible = 5): 
   return pages;
 }
 
+const DISCOVERY_ROULETTE_TAGS = [
+  { tag: 'trending', label: '🔥 Tendencias Globales' },
+  { tag: 'sound', label: '🎵 Con Audio HD' },
+  { tag: 'viral', label: '⭐ Lo Más Viral' },
+  { tag: 'dance', label: '💃 Baile & Ritmo' },
+  { tag: 'beach', label: '🏖️ Playa & Verano' },
+  { tag: 'fitness', label: '🏋️ Fitness & Gym' },
+  { tag: 'gaming', label: '🎮 Videojuegos & Esports' },
+  { tag: 'cosplay', label: '🎭 Cosplay & Fantasía' },
+  { tag: 'anime', label: '🌌 Anime & Animación' },
+  { tag: 'model', label: '✨ Moda & Pasarela' },
+  { tag: 'cars', label: '🚗 Coches & Velocidad' },
+  { tag: 'pets', label: '🐱 Mascotas & Animales' },
+  { tag: 'neon', label: '⚡ Cyberpunk & Neon' },
+  { tag: 'slowmo', label: '⏱️ Cámara Lenta' },
+  { tag: 'style', label: '👗 Estilo & Glamour' }
+];
+
+function getGridColsClass(cols: 2 | 3 | 4 | 5) {
+  switch (cols) {
+    case 2:
+      return 'grid grid-cols-1 sm:grid-cols-2 gap-4';
+    case 3:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4';
+    case 4:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+    case 5:
+      return 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3';
+    default:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+  }
+}
+
 export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onOpenLightbox,
   onSuccessDownload,
@@ -129,6 +162,43 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Selector de Columnas persistente (Default: 4 columnas)
+  const [gridCols, setGridCols] = useState<2 | 3 | 4 | 5>(() => {
+    try {
+      const saved = localStorage.getItem('rg_grid_cols');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if ([2, 3, 4, 5].includes(parsed)) return parsed as 2 | 3 | 4 | 5;
+      }
+    } catch {}
+    return 4;
+  });
+
+  const handleSetGridCols = (cols: 2 | 3 | 4 | 5) => {
+    setGridCols(cols);
+    localStorage.setItem('rg_grid_cols', cols.toString());
+    showToast(`Diseño cambiado a ${cols} columnas`);
+  };
+
+  // Ruleta de Descubrimiento Aleatorio
+  const [isSpinning, setIsSpinning] = useState(false);
+  const handleRollRoulette = () => {
+    if (isSpinning) return;
+    setIsSpinning(true);
+    const pool = DISCOVERY_ROULETTE_TAGS.filter(t => t.tag !== activeTag);
+    const chosen = pool[Math.floor(Math.random() * pool.length)] || DISCOVERY_ROULETTE_TAGS[0];
+
+    showToast(`🎲 Ruleta girando...`);
+    setTimeout(() => {
+      setIsSpinning(false);
+      setSearchQuery(chosen.tag);
+      setActiveTag(chosen.tag);
+      executeSearch(chosen.tag, 1, false);
+      showToast(`¡Descubrimiento!: ${chosen.label} 🚀`);
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 450);
+  };
 
   // Referencias para scroll y menú flotante
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -559,8 +629,20 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
           )}
         </div>
 
-        {/* Barra de Operadores Booleanos y Ejemplos Rápidos */}
+        {/* Barra de Operadores Booleanos, Ruleta y Presets Rápidos */}
         <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
+          {/* Botón Ruleta de Descubrimiento Inteligente */}
+          <button
+            type="button"
+            onClick={handleRollRoulette}
+            disabled={isSpinning}
+            className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:opacity-90 text-white px-3.5 py-1 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md shadow-pink-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+            title="Explorar un género o categoría aleatoria automáticamente con el algoritmo de descubrimiento"
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${isSpinning ? 'animate-spin' : ''}`} />
+            <span>🎲 Ruleta / Sorpréndeme</span>
+          </button>
+
           <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
             <span className="text-slate-400 font-bold px-2">Operadores:</span>
             <button
@@ -569,7 +651,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-extrabold flex items-center gap-1 transition-transform active:scale-95 cursor-pointer"
               title="Incluir término obligatorio (AND)"
             >
-              <Plus className="w-3 h-3" /> AND (Incluir)
+              <Plus className="w-3 h-3" /> AND
             </button>
             <button
               type="button"
@@ -577,7 +659,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               className="bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-lg font-extrabold flex items-center gap-1 transition-transform active:scale-95 cursor-pointer"
               title="Excluir término (NOT)"
             >
-              <Minus className="w-3 h-3" /> NOT (Excluir)
+              <Minus className="w-3 h-3" /> NOT
             </button>
           </div>
 
@@ -746,6 +828,28 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <span>Filtros {showFilters ? '▲' : '▼'}</span>
             </button>
 
+            {/* Selector de Columnas (Solo en Grid) */}
+            {viewMode === 'grid' && (
+              <div className="flex items-center bg-black/40 rounded-xl p-0.5 border border-white/10 text-xs">
+                <span className="text-[10px] text-slate-500 font-bold px-1.5 hidden sm:inline">COLS:</span>
+                {([2, 3, 4, 5] as const).map((cols) => (
+                  <button
+                    key={cols}
+                    type="button"
+                    onClick={() => handleSetGridCols(cols)}
+                    className={`px-2 py-1 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                      gridCols === cols
+                        ? 'bg-red-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title={`${cols} columnas`}
+                  >
+                    {cols}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Toggle Cuadrícula / Lista */}
             <div className="flex items-center bg-black/40 rounded-xl p-0.5 border border-white/10">
               <button
@@ -890,7 +994,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={getGridColsClass(gridCols)}>
           {filteredResults.map((item) => {
             const isSelected = selectedIds.has(item.id);
             const isHovered = hoveredId === item.id;

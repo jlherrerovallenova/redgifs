@@ -38,6 +38,21 @@ interface FavoritesListProps {
   showToast: (msg: string) => void;
 }
 
+function getGridColsClass(cols: 2 | 3 | 4 | 5) {
+  switch (cols) {
+    case 2:
+      return 'grid grid-cols-1 sm:grid-cols-2 gap-4';
+    case 3:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4';
+    case 4:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+    case 5:
+      return 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3';
+    default:
+      return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4';
+  }
+}
+
 export const FavoritesList: React.FC<FavoritesListProps> = ({
   favorites,
   onToggleFavorite,
@@ -56,6 +71,24 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
   const [audioFilter, setAudioFilter] = useState<'all' | 'audio' | 'mute'>('all');
   const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'long'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'views' | 'likes' | 'duration'>('recent');
+  
+  // Selector de Columnas persistente (Default: 4 columnas)
+  const [gridCols, setGridCols] = useState<2 | 3 | 4 | 5>(() => {
+    try {
+      const saved = localStorage.getItem('rg_grid_cols');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if ([2, 3, 4, 5].includes(parsed)) return parsed as 2 | 3 | 4 | 5;
+      }
+    } catch {}
+    return 4;
+  });
+
+  const handleSetGridCols = (cols: 2 | 3 | 4 | 5) => {
+    setGridCols(cols);
+    localStorage.setItem('rg_grid_cols', cols.toString());
+    showToast(`Diseño cambiado a ${cols} columnas`);
+  };
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -374,6 +407,26 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                   <option value="likes">Más valorados</option>
                   <option value="duration">Mayor duración</option>
                 </select>
+
+                {/* Selector de Columnas */}
+                <div className="flex items-center bg-black/40 rounded-xl p-0.5 border border-white/10 text-xs shrink-0">
+                  <span className="text-[10px] text-slate-500 font-bold px-1.5 hidden sm:inline">COLS:</span>
+                  {([2, 3, 4, 5] as const).map((cols) => (
+                    <button
+                      key={cols}
+                      type="button"
+                      onClick={() => handleSetGridCols(cols)}
+                      className={`px-2 py-1 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                        gridCols === cols
+                          ? 'bg-pink-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                      title={`${cols} columnas`}
+                    >
+                      {cols}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -435,7 +488,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className={getGridColsClass(gridCols)}>
           {filteredFavorites.map((item, index) => {
             const isHovered = hoveredId === item.id;
             const isDownloading = downloadingId === item.id;
