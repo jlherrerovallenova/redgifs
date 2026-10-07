@@ -1063,9 +1063,10 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                     <button
                       type="button"
                       onClick={(e) => handleDownload(item, 'hd', e)}
-                      className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-red-500/20 cursor-pointer"
+                      className="flex-1 min-w-0 bg-gradient-to-r from-red-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 px-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-red-500/20 cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5" /> Descargar HD
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">Descargar HD</span>
                     </button>
 
                     {onToggleFavorite && (
@@ -1076,7 +1077,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                           onToggleFavorite(item);
                         }}
                         title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
-                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                        className={`p-2 rounded-xl border transition-colors cursor-pointer shrink-0 ${
                           isFavorite && isFavorite(item.id)
                             ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
                             : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
@@ -1099,7 +1100,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                           onOpenTheater(filteredResults, idx >= 0 ? idx : 0);
                         }}
                         title="Ver en modo Feed / Reels continuo"
-                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer shrink-0"
                       >
                         <Film className="w-3.5 h-3.5" />
                       </button>
@@ -1109,7 +1110,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                       type="button"
                       onClick={(e) => handleCopyLink(item, e)}
                       title="Copiar enlace"
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer shrink-0"
                     >
                       {copiedId === item.id ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />

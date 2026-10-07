@@ -123,34 +123,17 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     localStorage.setItem('rg_recent_creators', JSON.stringify(updated));
   };
 
-  const openInAlohaBrowser = (query: string, e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    const targetUrl = `https://simpcity.cr/search/search?keywords=${encodeURIComponent(query)}`;
+  const handleSimpCitySearch = (query: string, e: React.MouseEvent) => {
+    const clean = query.trim().replace(/^@/, '');
+    const targetUrl = `https://simpcity.cr/search/?q=${encodeURIComponent(clean)}`;
     const isAndroid = /android/i.test(navigator.userAgent);
-    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
     if (isAndroid) {
-      // Intent directo para paquete de Aloha Browser en Android con fallback
-      const alohaIntent = `intent://simpcity.cr/search/search?keywords=${encodeURIComponent(query)}#Intent;scheme=https;package=com.aloha.browser;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
-      window.location.href = alohaIntent;
-    } else if (isIOS) {
-      // Protocolo deep-link de Aloha en iOS
-      window.location.href = `alohabrowser://open_link?link=${encodeURIComponent(targetUrl)}`;
-      setTimeout(() => {
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      }, 1500);
-    } else {
-      // En Windows / Escritorio: intenta esquema alohabrowser:// o abre la URL
-      try {
-        window.location.href = `alohabrowser://open_link?link=${encodeURIComponent(targetUrl)}`;
-      } catch {
-        // fallback
-      }
-      setTimeout(() => {
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      }, 600);
+      e.preventDefault();
+      // En Android intent directo al paquete de Aloha Browser con fallback
+      window.location.href = `intent://simpcity.cr/search/?q=${encodeURIComponent(clean)}#Intent;scheme=https;package=com.aloha.browser;S.browser_fallback_url=${encodeURIComponent(targetUrl)};end`;
     }
-    showToast(`Abriendo búsqueda en Aloha Browser...`);
+    showToast(`Buscando @${clean} en SimpCity...`);
   };
 
   // Cargar creador inicial o cuando cambia el timestamp
@@ -508,25 +491,25 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                 </a>
               ))}
               <a
-                href={`https://simpcity.cr/search/search?keywords=${encodeURIComponent(profile.name || profile.username)}`}
-                onClick={(e) => openInAlohaBrowser(profile.name || profile.username, e)}
+                href={`https://simpcity.cr/search/?q=${encodeURIComponent(profile.name || profile.username)}`}
+                onClick={(e) => handleSimpCitySearch(profile.name || profile.username, e)}
                 target="_blank"
                 rel="noopener noreferrer"
-                title={`Buscar ${profile.name || profile.username} en SimpCity (Aloha Browser)`}
-                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/10 hover:scale-105 active:scale-95 cursor-pointer"
+                title={`Buscar ${profile.name || profile.username} en SimpCity`}
+                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 px-3 py-1.5 rounded-xl border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shadow-amber-500/10 hover:scale-105 active:scale-95 cursor-pointer shrink-0"
               >
-                <Search className="w-3.5 h-3.5 text-amber-400" />
-                <span>Buscar en SimpCity (Aloha)</span>
-                <ExternalLink className="w-3 h-3 text-amber-400/70" />
+                <Search className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Buscar en SimpCity</span>
+                <ExternalLink className="w-3 h-3 text-amber-400/70 shrink-0" />
               </a>
               <a
                 href={profile.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 px-3 py-1.5 rounded-xl border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 px-3 py-1.5 rounded-xl border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
               >
                 <span>Ver en RedGIFs</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
               </a>
             </div>
           </div>
@@ -933,9 +916,10 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     <button
                       type="button"
                       onClick={(e) => handleDownload(item, 'hd', e)}
-                      className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-purple-500/20 cursor-pointer"
+                      className="flex-1 min-w-0 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 px-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-purple-500/20 cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5" /> Descargar HD
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">Descargar HD</span>
                     </button>
 
                     {onToggleFavorite && (
@@ -946,7 +930,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                           onToggleFavorite(item);
                         }}
                         title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
-                        className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                        className={`p-2 rounded-xl border transition-colors cursor-pointer shrink-0 ${
                           isFavorite && isFavorite(item.id)
                             ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
                             : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
@@ -969,7 +953,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                           onOpenTheater(filteredVideos, idx >= 0 ? idx : 0);
                         }}
                         title="Ver en modo Feed / Reels continuo"
-                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer shrink-0"
                       >
                         <Film className="w-3.5 h-3.5" />
                       </button>
@@ -979,7 +963,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                       type="button"
                       onClick={(e) => handleCopyLink(item, e)}
                       title="Copiar enlace"
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer shrink-0"
                     >
                       {copiedId === item.id ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />

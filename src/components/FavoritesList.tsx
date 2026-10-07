@@ -579,14 +579,14 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                       type="button"
                       disabled={isDownloading}
                       onClick={(e) => handleDownloadHD(item, e)}
-                      className="flex-1 bg-gradient-to-r from-pink-600 to-red-600 hover:opacity-90 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-pink-500/20 cursor-pointer disabled:opacity-50"
+                      className="flex-1 min-w-0 bg-gradient-to-r from-pink-600 to-red-600 hover:opacity-90 text-white font-bold py-2 px-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-pink-500/20 cursor-pointer disabled:opacity-50"
                     >
                       {isDownloading ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                       ) : (
-                        <Download className="w-3.5 h-3.5" />
+                        <Download className="w-3.5 h-3.5 shrink-0" />
                       )}
-                      <span>Descargar HD</span>
+                      <span className="truncate">Descargar HD</span>
                     </button>
 
                     {onOpenTheater && (
@@ -597,7 +597,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                           onOpenTheater(filteredFavorites, index);
                         }}
                         title="Ver en modo Reels a pantalla completa"
-                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer shrink-0"
                       >
                         <Film className="w-3.5 h-3.5" />
                       </button>
@@ -607,7 +607,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                       type="button"
                       onClick={(e) => handleCopyLink(item, e)}
                       title="Copiar enlace"
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer"
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer shrink-0"
                     >
                       {copiedId === item.id ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />

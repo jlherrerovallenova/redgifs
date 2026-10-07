@@ -19,69 +19,96 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTheater
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-[#090a0f]/90 backdrop-blur-md border-b border-white/10 px-4 py-3">
-      <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-pink-600 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-red-500/30">
-            RG
+    <header className="sticky top-0 z-40 bg-[#090a0f]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-4 py-2.5 sm:py-3">
+      <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 w-full">
+        {/* Logo & Branding */}
+        <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-red-600 via-pink-600 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-red-500/30 shrink-0">
+              RG
+            </div>
+            <div>
+              <h1 className="font-display font-extrabold text-lg sm:text-xl tracking-tight leading-tight">
+                RED<span className="bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent">GIFS</span> PRO
+              </h1>
+              <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Vite & PWA Native Edition</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-display font-extrabold text-xl tracking-tight">
-              RED<span className="bg-gradient-to-r from-red-500 via-pink-500 to-purple-500 bg-clip-text text-transparent">GIFS</span> PRO
-            </h1>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Vite & PWA Native Edition</p>
+
+          {/* Quick Action buttons on mobile top right */}
+          <div className="flex md:hidden items-center gap-1.5">
+            {onOpenTheater && (
+              <button
+                type="button"
+                onClick={onOpenTheater}
+                className="flex items-center gap-1 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white px-2.5 py-1 rounded-full text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Reels</span>
+              </button>
+            )}
+            {onOpenInstallModal && (
+              <button
+                type="button"
+                onClick={onOpenInstallModal}
+                className="p-1.5 rounded-full bg-purple-600/20 text-purple-300 border border-purple-500/30"
+                title="Instalar App"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
         {/* Navigation Tabs & Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <nav className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10" aria-label="Pestañas principales">
+        <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-2 overflow-x-auto no-scrollbar max-w-full pb-0.5">
+          <nav className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 shrink-0 overflow-x-auto no-scrollbar" aria-label="Pestañas principales">
             <button
               type="button"
               onClick={() => setActiveTab('single')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'single' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Download className="w-4 h-4" /> Descargar
+              <Download className="w-3.5 h-3.5" /> <span>Descargar</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('batch')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'batch' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Layers className="w-4 h-4" /> Por Lotes
+              <Layers className="w-3.5 h-3.5" /> <span>Por Lotes</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('explore')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'explore' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Search className="w-4 h-4" /> Explorar
+              <Search className="w-3.5 h-3.5" /> <span>Explorar</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('creators')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'creators' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <User className="w-4 h-4" /> Creadores
+              <User className="w-3.5 h-3.5" /> <span>Creadores</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('favorites')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'favorites' ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md shadow-pink-600/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Heart className={`w-4 h-4 ${favoritesCount > 0 ? 'text-pink-400 fill-pink-500/40' : ''}`} /> Favoritos
+              <Heart className={`w-3.5 h-3.5 ${favoritesCount > 0 ? 'text-pink-400 fill-pink-500/40' : ''}`} /> <span>Favoritos</span>
               {favoritesCount > 0 && (
-                <span className="bg-pink-500/20 text-pink-300 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                <span className="bg-pink-500/20 text-pink-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                   {favoritesCount}
                 </span>
               )}
@@ -89,44 +116,45 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('history')}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
                 activeTab === 'history' ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <History className="w-4 h-4" /> Historial
+              <History className="w-3.5 h-3.5" /> <span>Historial</span>
               {historyCount > 0 && (
-                <span className="bg-red-500/20 text-red-400 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                <span className="bg-red-500/20 text-red-400 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                   {historyCount}
                 </span>
               )}
             </button>
           </nav>
 
-          {/* Botón Feed Continuo / Reels */}
-          {onOpenTheater && (
-            <button
-              type="button"
-              onClick={onOpenTheater}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95 cursor-pointer shrink-0"
-              title="Abrir modo Feed continuo / Reels a pantalla completa"
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>Feed Reels</span>
-            </button>
-          )}
+          {/* Desktop Actions */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            {onOpenTheater && (
+              <button
+                type="button"
+                onClick={onOpenTheater}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 hover:opacity-90 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shadow-red-500/20 active:scale-95 cursor-pointer shrink-0"
+                title="Abrir modo Feed continuo / Reels a pantalla completa"
+              >
+                <Film className="w-3.5 h-3.5" />
+                <span>Feed Reels</span>
+              </button>
+            )}
 
-          {/* Botón de Instalación PWA */}
-          {onOpenInstallModal && (
-            <button
-              type="button"
-              onClick={onOpenInstallModal}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 text-purple-300 border border-purple-500/30 hover:border-purple-400 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
-              title="Instalar RedGIFs Pro en tu iPad, iPhone o PC"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-purple-400" />
-              <span className="hidden sm:inline">Instalar App</span>
-            </button>
-          )}
+            {onOpenInstallModal && (
+              <button
+                type="button"
+                onClick={onOpenInstallModal}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 text-purple-300 border border-purple-500/30 hover:border-purple-400 px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+                title="Instalar RedGIFs Pro en tu iPad, iPhone o PC"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-purple-400" />
+                <span className="hidden xl:inline">Instalar App</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </header>
