@@ -2,9 +2,19 @@ import { RedGifItem, SearchResultItem, UserProfile, CreatorFeedResult } from '..
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
+let tokenFetchPromise: Promise<string> | null = null;
 
-/** Hace fetch con un timeout en ms (por defecto 12 s). */
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 12000): Promise<Response> {
+/**
+ * Invalida el token en memoria para forzar una renovación limpia en la siguiente petición.
+ */
+export function invalidateAuthToken(): void {
+  cachedToken = null;
+  tokenExpiry = 0;
+  tokenFetchPromise = null;
+}
+
+/** Hace fetch con un timeout en ms (por defecto 15 s). */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -14,121 +24,213 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 1
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+interface FetchResult<T> {
+  success: boolean;
+  data?: T;
+  status?: number;
+  isAuthError?: boolean;
+  isNotFound?: boolean;
+}
+
 /**
- * Consulta un endpoint de RedGIFs asegurando que la respuesta sea JSON legítimo
- * y evitando excepciones de parsing HTML en Safari / iOS.
+ * Ejecuta una petición HTTP asegurando que la respuesta sea JSON válido y controlando errores 401/403/404.
  */
-async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<T | null> {
+async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<FetchResult<T>> {
   try {
     const res = await fetchWithTimeout(url, options);
     const contentType = res.headers.get('content-type') || '';
 
-    // Si la respuesta no es JSON (p. ej. si un router SPA devuelve index.html), descartar inmediatamente
-    if (!contentType.includes('json')) {
-      console.warn(`[RedGIFs] ${url} → content-type no JSON: "${contentType}"`);
-      return null;
+    if (res.status === 401 || res.status === 403) {
+      return { success: false, status: res.status, isAuthError: true };
     }
 
     if (res.status === 404 || res.status === 410) {
-      throw new Error('El video solicitado no existe o ha sido eliminado.');
+      return { success: false, status: res.status, isNotFound: true };
     }
 
     if (!res.ok) {
-      console.warn(`[RedGIFs] ${url} → HTTP ${res.status}`);
-      throw new Error(`Error en servidor RedGIFs: HTTP ${res.status}`);
+      return { success: false, status: res.status };
+    }
+
+    if (!contentType.includes('json')) {
+      return { success: false, status: res.status };
     }
 
     const text = await res.text();
-
     try {
-      return JSON.parse(text) as T;
+      const parsed = JSON.parse(text) as T;
+      return { success: true, data: parsed, status: res.status };
     } catch {
-      console.warn(`[RedGIFs] ${url} → JSON.parse falló`);
-      return null;
+      return { success: false, status: res.status };
     }
   } catch (err: any) {
-    if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
-      throw err;
-    }
-    console.warn(`[RedGIFs] ${url} → Error: ${err?.message ?? err}`);
-    return null;
+    return { success: false };
   }
 }
 
 /**
- * Intenta obtener JSON desde allorigins.win, que envuelve la respuesta
- * en { contents: "...", status: { http_code: 200 } }.
+ * Intenta obtener JSON usando servicios de proxy CORS con soporte de headers (fallback de contingencia).
  */
-async function tryAllOriginsProxy<T>(path: string, options: RequestInit): Promise<T | null> {
+async function tryProxyEndpoints<T>(path: string, options: RequestInit): Promise<FetchResult<T>> {
   const targetUrl = `https://api.redgifs.com/v2${path}`;
-  // allorigins no permite enviar cabeceras personalizadas; solo sirve para el token inicial
-  // y endpoints que no requieran Authorization.
-  const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-  try {
-    const res = await fetchWithTimeout(proxyUrl, {}, 15000);
-    if (!res.ok) return null;
-    const wrapper = await res.json() as { contents?: string; status?: { http_code: number } };
-    const httpCode = wrapper?.status?.http_code ?? 0;
-    if (httpCode === 404 || httpCode === 410) {
-      throw new Error('El video solicitado no existe o ha sido eliminado.');
-    }
-    if (!wrapper?.contents) return null;
+  const encoded = encodeURIComponent(targetUrl);
+
+  const proxyUrls = [
+    `https://corsproxy.io/?url=${encoded}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+    `https://api.allorigins.win/raw?url=${encoded}`
+  ];
+
+  for (const pUrl of proxyUrls) {
     try {
-      return JSON.parse(wrapper.contents) as T;
+      const res = await tryFetchEndpoint<T>(pUrl, options);
+      if (res.success && res.data !== undefined) {
+        return res;
+      }
+      if (res.isAuthError || res.isNotFound) {
+        return res;
+      }
     } catch {
-      return null;
+      continue;
     }
-  } catch (err: any) {
-    if (err.message && (err.message.includes('no existe') || err.message.includes('eliminado'))) {
-      throw err;
-    }
-    return null;
   }
+
+  // Fallback con allorigins wrapper
+  try {
+    const wrapperUrl = `https://api.allorigins.win/get?url=${encoded}`;
+    const res = await fetchWithTimeout(wrapperUrl, {}, 12000);
+    if (res.ok) {
+      const wrapper = await res.json() as { contents?: string; status?: { http_code: number } };
+      if (wrapper.status?.http_code === 401 || wrapper.status?.http_code === 403) {
+        return { success: false, isAuthError: true };
+      }
+      if (wrapper.status?.http_code === 404 || wrapper.status?.http_code === 410) {
+        return { success: false, isNotFound: true };
+      }
+      if (wrapper.contents) {
+        try {
+          const parsed = JSON.parse(wrapper.contents) as T;
+          return { success: true, data: parsed };
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return { success: false };
 }
 
-async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  // 1. Proxy local de Vite (/api/redgifs) — resuelve CORS y cabeceras Referer/Origin automáticamente
-  const proxyData = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
-  if (proxyData !== null) {
-    return proxyData;
+/**
+ * Petición principal a RedGIFs con fallback múltiple y autorrecuperación de token si caduca.
+ */
+async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
+  // 1. Probar proxy Vite local (/api/redgifs) en entorno dev
+  const viteRes = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
+  if (viteRes.success && viteRes.data !== undefined) {
+    return viteRes.data;
+  }
+  if (viteRes.isNotFound) {
+    throw new Error('El recurso solicitado no existe o ha sido eliminado.');
+  }
+  if (viteRes.isAuthError && retryCount === 0) {
+    invalidateAuthToken();
+    const freshToken = await getAuthToken(true);
+    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
   }
 
-  // 2. Directo con la API pública de RedGIFs (si se corre fuera del entorno Vite o con CORS permitido)
-  const directData = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
-  if (directData !== null) {
-    return directData;
+  // 2. Probar llamada directa a la API pública de RedGIFs
+  const directRes = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
+  if (directRes.success && directRes.data !== undefined) {
+    return directRes.data;
+  }
+  if (directRes.isNotFound) {
+    throw new Error('El recurso solicitado no existe o ha sido eliminado.');
+  }
+  if (directRes.isAuthError && retryCount === 0) {
+    invalidateAuthToken();
+    const freshToken = await getAuthToken(true);
+    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
   }
 
-  // 3. Proxy CORS gratuito allorigins.win (solo para rutas sin Authorization)
-  const hasAuth = !!(options.headers && (options.headers as Record<string, string>)['Authorization']);
-  if (!hasAuth) {
-    const allOriginsData = await tryAllOriginsProxy<T>(path, options);
-    if (allOriginsData !== null) {
-      return allOriginsData;
-    }
+  // 3. Probar proxies CORS redundantes
+  const proxyRes = await tryProxyEndpoints<T>(path, options);
+  if (proxyRes.success && proxyRes.data !== undefined) {
+    return proxyRes.data;
+  }
+  if (proxyRes.isNotFound) {
+    throw new Error('El recurso solicitado no existe o ha sido eliminado.');
+  }
+  if (proxyRes.isAuthError && retryCount === 0) {
+    invalidateAuthToken();
+    const freshToken = await getAuthToken(true);
+    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+  }
+
+  // 4. Si falló por corte de red o suspensión temporal de la pestaña/iPad, reintentar tras breve pausa
+  if (retryCount < 2) {
+    await sleep(600 * (retryCount + 1));
+    return requestRedGifsJson<T>(path, options, retryCount + 1);
   }
 
   throw new Error('No se pudo conectar con la API de RedGIFs. Comprueba tu conexión a internet.');
 }
 
 /**
- * Obtiene o renueva el token temporal de autorización de RedGIFs.
+ * Obtiene o renueva el token temporal de autorización de RedGIFs de forma concurrente y segura.
  */
-export async function getAuthToken(): Promise<string> {
+export async function getAuthToken(forceRefresh = false): Promise<string> {
   const now = Date.now();
-  if (cachedToken && now < tokenExpiry) {
+  if (!forceRefresh && cachedToken && now < tokenExpiry) {
     return cachedToken;
   }
 
-  const data = await requestRedGifsJson<{ token: string }>('/auth/temporary');
-  if (!data?.token) {
-    throw new Error('No se pudo obtener el token de autorización de RedGIFs.');
+  if (tokenFetchPromise && !forceRefresh) {
+    return tokenFetchPromise;
   }
 
-  cachedToken = data.token;
-  tokenExpiry = now + 25 * 60 * 1000; // 25 minutos
+  tokenFetchPromise = (async () => {
+    try {
+      const data = await requestRedGifsJson<{ token: string }>('/auth/temporary');
+      if (!data?.token) {
+        throw new Error('Respuesta de token inválida');
+      }
 
-  return cachedToken;
+      cachedToken = data.token;
+      // Expiración conservadora de 12 minutos para evitar usar tokens obsoletos
+      tokenExpiry = Date.now() + 12 * 60 * 1000;
+      return cachedToken;
+    } catch (err) {
+      invalidateAuthToken();
+      throw new Error('No se pudo obtener el token de autorización de RedGIFs.');
+    } finally {
+      tokenFetchPromise = null;
+    }
+  })();
+
+  return tokenFetchPromise;
+}
+
+// Escuchadores de eventos para reconexión instantánea en iPadOS y navegadores
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    invalidateAuthToken();
+    getAuthToken(true).catch(() => {});
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      if (!cachedToken || Date.now() > tokenExpiry - 3 * 60 * 1000) {
+        invalidateAuthToken();
+        getAuthToken(true).catch(() => {});
+      }
+    }
+  });
 }
 
 /**
