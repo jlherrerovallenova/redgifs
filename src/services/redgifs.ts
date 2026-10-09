@@ -668,45 +668,76 @@ export async function getCreatorFeed(
   };
 }
 
-/**
- * Busca creadores por nombre de usuario o palabra clave.
- */
-export async function searchCreators(query: string, count = 12): Promise<UserProfile[]> {
-  const clean = query.trim().replace(/^@/, '');
-  if (!clean) return [];
+export interface CreatorSearchResult {
+  items: UserProfile[];
+  page: number;
+  pages: number;
+  total: number;
+}
 
+/**
+ * Busca creadores por nombre de usuario o palabra clave con paginación completa.
+ */
+export async function searchCreatorsPaginated(
+  query: string,
+  count = 20,
+  page = 1,
+  order: 'best' | 'recent' | 'trending' = 'best'
+): Promise<CreatorSearchResult> {
+  const clean = query.trim().replace(/^@/, '');
   const token = await getAuthToken();
   const params = new URLSearchParams({
-    search_text: clean,
-    count: String(count * 2)
+    search_text: clean || 'a',
+    count: String(count * 2),
+    page: String(page),
+    order
   });
 
-  const data = await requestRedGifsJson<any>(`/creators/search?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  try {
+    const data = await requestRedGifsJson<any>(`/creators/search?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
 
-  const rawItems = Array.isArray(data.items) ? data.items : [];
-  return rawItems
-    .map((u: any) => ({
-      username: u.username,
-      name: u.name || u.username,
-      description: u.description || undefined,
-      followers: Number(u.followers) || 0,
-      following: Number(u.following) || 0,
-      gifs: Number(u.publishedGifs || u.gifs) || 0,
-      views: Number(u.views) || 0,
-      likes: Number(u.likes) || 0,
-      profileImageUrl: u.profileImageUrl || undefined,
-      profileUrl: u.profileUrl || undefined,
-      url: u.url || `https://www.redgifs.com/users/${u.username}`,
-      verified: Boolean(u.verified),
-      studio: Boolean(u.studio),
-      socialLinks: extractSocialLinks(u)
-    }))
-    .filter(u => isContentAllowed({ userName: u.username, title: u.name, description: u.description }))
-    .slice(0, count);
+    const rawItems = Array.isArray(data.items) ? data.items : [];
+    const items: UserProfile[] = rawItems
+      .map((u: any) => ({
+        username: u.username,
+        name: u.name || u.username,
+        description: u.description || undefined,
+        followers: Number(u.followers) || 0,
+        following: Number(u.following) || 0,
+        gifs: Number(u.publishedGifs || u.gifs) || 0,
+        views: Number(u.views) || 0,
+        likes: Number(u.likes) || 0,
+        profileImageUrl: u.profileImageUrl || undefined,
+        profileUrl: u.profileUrl || undefined,
+        url: u.url || `https://www.redgifs.com/users/${u.username}`,
+        verified: Boolean(u.verified),
+        studio: Boolean(u.studio),
+        socialLinks: extractSocialLinks(u)
+      }))
+      .filter(u => isContentAllowed({ userName: u.username, title: u.name, description: u.description }))
+      .slice(0, count);
+
+    return {
+      items,
+      page: Number(data.page) || page,
+      pages: Number(data.pages) || Math.max(1, Math.ceil((Number(data.total) || items.length) / count)),
+      total: Number(data.total) || items.length
+    };
+  } catch {
+    return { items: [], page: 1, pages: 1, total: 0 };
+  }
+}
+
+/**
+ * Busca creadores por nombre de usuario o palabra clave (compatibilidad).
+ */
+export async function searchCreators(query: string, count = 12): Promise<UserProfile[]> {
+  const res = await searchCreatorsPaginated(query, count, 1);
+  return res.items;
 }
 
 /**

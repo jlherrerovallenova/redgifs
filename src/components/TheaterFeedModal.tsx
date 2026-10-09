@@ -423,11 +423,21 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   // Fullscreen
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
+    const video = videoRef.current;
+    
+    // Check iOS/iPad Safari native video fullscreen
+    if ((video as any)?.webkitEnterFullscreen) {
+      (video as any).webkitEnterFullscreen();
+      return;
+    }
+
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(() => {});
+      containerRef.current.requestFullscreen?.().catch(() => {
+        (video as any)?.webkitEnterFullscreen?.();
+      });
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen?.().catch(() => {});
       setIsFullscreen(false);
     }
   };
@@ -553,9 +563,16 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
     touchStartY.current = null;
     touchStartX.current = null;
 
-    // Check vertical dominance
-    if (Math.abs(deltaY) > 50 && Math.abs(deltaY) > Math.abs(deltaX)) {
+    // Check vertical swipe dominance
+    if (Math.abs(deltaY) > 40 && Math.abs(deltaY) > Math.abs(deltaX)) {
       if (deltaY > 0) {
+        goToNext();
+      } else {
+        goToPrev();
+      }
+    } else if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      // Horizontal swipe on iPad: swipe left to go next, swipe right to go prev
+      if (deltaX > 0) {
         goToNext();
       } else {
         goToPrev();
@@ -1074,26 +1091,26 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
         </div>
       </div>
 
-      {/* Side Navigation Buttons (Desktop Up / Down Arrows) */}
-      <div className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 hidden md:flex flex-col gap-3 z-40">
+      {/* Side Navigation Buttons (Tablets & Desktop Up / Down Arrows) */}
+      <div className="absolute right-2 sm:right-6 top-1/3 -translate-y-1/2 flex flex-col gap-2.5 z-40">
         <button
           type="button"
           onClick={goToPrev}
           disabled={currentIndex === 0}
-          className="w-12 h-12 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-2xl hover:scale-110 active:scale-95"
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-2xl active:scale-90"
           title="Video anterior (Flecha Arriba ↑ / W)"
         >
-          <ChevronUp className="w-6 h-6" />
+          <ChevronUp className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
 
         <button
           type="button"
           onClick={goToNext}
           disabled={currentIndex >= videos.length - 1}
-          className="w-12 h-12 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-2xl hover:scale-110 active:scale-95"
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center transition-all cursor-pointer shadow-2xl active:scale-90"
           title="Siguiente video (Flecha Abajo ↓ / S / Rueda ratón / Swipe)"
         >
-          <ChevronDown className="w-6 h-6" />
+          <ChevronDown className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
       </div>
 

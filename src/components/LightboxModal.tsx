@@ -249,12 +249,22 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   // Toggle Fullscreen
   const toggleFullscreen = () => {
     const container = playerContainerRef.current;
+    const video = videoRef.current;
+    
+    // Check iOS/iPad Safari native video fullscreen
+    if ((video as any)?.webkitEnterFullscreen) {
+      (video as any).webkitEnterFullscreen();
+      return;
+    }
+
     if (!container) return;
     if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(() => {});
+      container.requestFullscreen?.().catch(() => {
+        (video as any)?.webkitEnterFullscreen?.();
+      });
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen?.().catch(() => {});
       setIsFullscreen(false);
     }
   };

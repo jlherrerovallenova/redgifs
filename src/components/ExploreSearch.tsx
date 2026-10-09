@@ -48,6 +48,7 @@ interface ExploreSearchProps {
   onSelectCreator?: (username: string) => void;
   initialTag?: string;
   tagTimestamp?: number;
+  onUpdateQuery?: (query: string) => void;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
@@ -151,6 +152,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onSelectCreator,
   initialTag,
   tagTimestamp,
+  onUpdateQuery,
   onOpenTheater,
   onToggleFavorite,
   isFavorite
@@ -365,19 +367,30 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     e.preventDefault();
     const term = searchQuery.trim();
     if (!term) return;
+
+    if (term.startsWith('@') && onSelectCreator) {
+      const creatorName = term.slice(1).trim();
+      if (onUpdateQuery) onUpdateQuery(term);
+      onSelectCreator(creatorName);
+      return;
+    }
+
     setActiveTag('');
+    if (onUpdateQuery) onUpdateQuery(term);
     executeSearch(term, 1, false);
   };
 
   const handleTagClick = (tag: { label: string; query: string }) => {
     setActiveTag(tag.query);
     setSearchQuery(tag.query);
+    if (onUpdateQuery) onUpdateQuery(tag.query);
     executeSearch(tag.query, 1, false);
   };
 
   // Insertar sugerencia en la barra de búsqueda o navegar al creador
   const handleSelectSuggestion = (s: TagSuggestion) => {
     if (s.type === 'creator' && onSelectCreator) {
+      if (onUpdateQuery) onUpdateQuery(searchQuery || s.text);
       onSelectCreator(s.text);
       setShowSuggestions(false);
       return;
@@ -387,11 +400,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     const tokens = clean.split(/\s+/);
     if (tokens.length <= 1) {
       setSearchQuery(s.text);
+      if (onUpdateQuery) onUpdateQuery(s.text);
       executeSearch(s.text, 1, false);
     } else {
       tokens[tokens.length - 1] = s.text;
       const updated = tokens.join(' ');
       setSearchQuery(updated);
+      if (onUpdateQuery) onUpdateQuery(updated);
       executeSearch(updated, 1, false);
     }
     setShowSuggestions(false);
@@ -1118,6 +1133,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onSelectCreator) {
+                            if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
                             onSelectCreator(item.userName);
                           } else {
                             setSearchQuery(item.userName);
@@ -1302,6 +1318,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           if (onSelectCreator) {
+                            if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
                             onSelectCreator(item.userName);
                           } else {
                             setSearchQuery(item.userName);

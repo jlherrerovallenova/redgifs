@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart } from 'lucide-react';
+import { ArrowLeft, Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
@@ -8,6 +8,9 @@ interface HeaderProps {
   favoritesCount?: number;
   onOpenInstallModal?: () => void;
   onOpenTheater?: () => void;
+  canGoBack?: boolean;
+  onGoBack?: () => void;
+  previousTabLabel?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,14 +19,29 @@ export const Header: React.FC<HeaderProps> = ({
   historyCount,
   favoritesCount = 0,
   onOpenInstallModal,
-  onOpenTheater
+  onOpenTheater,
+  canGoBack = false,
+  onGoBack,
+  previousTabLabel
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-[#090a0f]/95 backdrop-blur-md border-b border-white/10 px-3 sm:px-4 py-2.5 sm:py-3">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 w-full">
         {/* Logo & Branding */}
         <div className="flex items-center justify-between w-full md:w-auto">
-          <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {canGoBack && onGoBack && (
+              <button
+                type="button"
+                onClick={onGoBack}
+                aria-label="Volver atrás"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm border border-white/15 transition-all shadow-md shadow-black/40 active:scale-95 cursor-pointer shrink-0 group"
+                title={previousTabLabel ? `Volver a ${previousTabLabel} (Alt + ←)` : 'Volver atrás (Alt + ←)'}
+              >
+                <ArrowLeft className="w-4 h-4 text-pink-400 group-hover:-translate-x-0.5 transition-transform" />
+                <span className="hidden sm:inline">Atrás</span>
+              </button>
+            )}
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-red-600 via-pink-600 to-purple-600 flex items-center justify-center font-bold text-white shadow-lg shadow-red-500/30 shrink-0">
               RG
             </div>
@@ -117,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
                 activeTab === 'favorites' ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md shadow-pink-600/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Heart className={`w-3.5 h-3.5 ${favoritesCount > 0 ? 'text-pink-400 fill-pink-500/40' : ''}`} /> <span>Favoritos</span>
+              <Heart className={`w-3.5 h-3.5 ${favoritesCount > 0 ? 'text-pink-400 fill-pink-500/40' : ''}`} /> <span>Mis Listas</span>
               {favoritesCount > 0 && (
                 <span className="bg-pink-500/20 text-pink-300 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                   {favoritesCount}

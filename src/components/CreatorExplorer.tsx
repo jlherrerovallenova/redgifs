@@ -27,7 +27,8 @@ import {
   Flame,
   TrendingUp,
   Globe,
-  Film
+  Film,
+  ArrowLeft
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
@@ -48,6 +49,9 @@ interface CreatorExplorerProps {
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
+  onGoBack?: () => void;
+  canGoBack?: boolean;
+  previousLabel?: string;
 }
 
 const FEATURED_CREATORS = [
@@ -85,7 +89,10 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   onSelectTag,
   onOpenTheater,
   onToggleFavorite,
-  isFavorite
+  isFavorite,
+  onGoBack,
+  canGoBack,
+  previousLabel
 }) => {
   const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState(initialUsername);
@@ -140,6 +147,44 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
       return [];
     }
   });
+
+  // Creadores favoritos guardados
+  const [favoriteCreators, setFavoriteCreators] = useState<Array<{ username: string; name?: string; avatar?: string }>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('rg_favorite_creators') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const isCurrentCreatorFavorite = useMemo(() => {
+    if (!profile) return false;
+    const clean = profile.username.toLowerCase().trim();
+    return favoriteCreators.some(c => c.username.toLowerCase().trim() === clean);
+  }, [profile, favoriteCreators]);
+
+  const handleToggleFavoriteCreator = () => {
+    if (!profile) return;
+    const clean = profile.username.trim();
+    const exists = favoriteCreators.some(c => c.username.toLowerCase() === clean.toLowerCase());
+    let updated: Array<{ username: string; name?: string; avatar?: string }>;
+
+    if (exists) {
+      updated = favoriteCreators.filter(c => c.username.toLowerCase() !== clean.toLowerCase());
+      showToast(`@${clean} eliminado de tus creadores favoritos`);
+    } else {
+      const newFav = {
+        username: clean,
+        name: profile.name || clean,
+        avatar: profile.profileImageUrl
+      };
+      updated = [newFav, ...favoriteCreators.filter(c => c.username.toLowerCase() !== clean.toLowerCase())];
+      showToast(`¡@${clean} añadido a creadores favoritos! ❤️`);
+    }
+
+    setFavoriteCreators(updated);
+    localStorage.setItem('rg_favorite_creators', JSON.stringify(updated));
+  };
 
   const saveRecentCreator = (name: string) => {
     const clean = name.trim().replace(/^@/, '');
@@ -348,6 +393,21 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn pb-24">
+      {/* Botón de retroceso directo si venimos de otra búsqueda o pestaña */}
+      {canGoBack && onGoBack && (
+        <div className="flex items-center justify-between pb-1">
+          <button
+            type="button"
+            onClick={onGoBack}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all shadow-md hover:border-purple-500/40 active:scale-95 cursor-pointer group"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-purple-400 group-hover:-translate-x-1 transition-transform" />
+            <span>Volver {previousLabel ? `a ${previousLabel}` : 'atrás'}</span>
+            <span className="text-[10px] text-slate-500 font-mono hidden sm:inline ml-1 px-1.5 py-0.2 rounded bg-black/40 border border-white/10">Alt+←</span>
+          </button>
+        </div>
+      )}
+
       {/* Buscador de Creadores */}
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold tracking-wide">
@@ -422,6 +482,34 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Creadores Favoritos Guardados */}
+        {favoriteCreators.length > 0 && (
+          <div className="pt-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none justify-start sm:justify-center">
+              <span className="text-xs text-pink-400 font-bold shrink-0 mr-1 flex items-center gap-1">
+                <Heart className="w-3.5 h-3.5 fill-pink-500 text-pink-500" /> Favoritos:
+              </span>
+              {favoriteCreators.map((fc) => (
+                <button
+                  key={fc.username}
+                  type="button"
+                  onClick={() => {
+                    setUsernameInput(fc.username);
+                    loadCreator(fc.username, order, 1, false);
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all shrink-0 border cursor-pointer flex items-center gap-1.5 ${
+                    activeUsername.toLowerCase() === fc.username.toLowerCase()
+                      ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white border-transparent shadow-md shadow-pink-600/30 scale-105'
+                      : 'bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 border-pink-500/30'
+                  }`}
+                >
+                  <span>@{fc.username}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Historial de creadores recientes */}
         {recentCreators.length > 0 && (
@@ -509,8 +597,23 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               </div>
             </div>
 
-            {/* Enlaces Externos / Redes Sociales / SimpCity */}
+            {/* Enlaces Externos / Redes Sociales / Favorito / SimpCity */}
             <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto pt-2 lg:pt-0">
+              {/* Botón de Favorito del Creador */}
+              <button
+                type="button"
+                onClick={handleToggleFavoriteCreator}
+                className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 ${
+                  isCurrentCreatorFavorite
+                    ? 'bg-pink-600/20 hover:bg-pink-600/30 text-pink-300 border border-pink-500/60 shadow-pink-600/20'
+                    : 'bg-gradient-to-r from-pink-600 via-purple-600 to-rose-600 hover:opacity-90 text-white shadow-pink-600/30 border border-pink-500/30'
+                }`}
+                title={isCurrentCreatorFavorite ? 'Eliminar de creadores favoritos' : 'Añadir creador a favoritos'}
+              >
+                <Heart className={`w-4 h-4 ${isCurrentCreatorFavorite ? 'fill-pink-500 text-pink-500' : 'text-white'}`} />
+                <span>{isCurrentCreatorFavorite ? 'Creador en Favoritos' : 'Añadir a Favoritos'}</span>
+              </button>
+
               {profile.socialLinks && profile.socialLinks.map((link) => (
                 <a
                   key={`${link.type}-${link.url}`}

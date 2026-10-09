@@ -67,3 +67,13 @@ export interface CreatorFeedResult {
   total: number;
 }
 
+export interface CustomList {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  description?: string;
+  createdAt: number;
+  videos: SearchResultItem[];
+}
+
