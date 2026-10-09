@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RedGifItem, HistoryItem, SearchResultItem } from './types';
 import { Header } from './components/Header';
+import { DiscoverHub } from './components/DiscoverHub';
 import { SingleDownloader } from './components/SingleDownloader';
 import { BatchDownloader } from './components/BatchDownloader';
 import { ExploreSearch } from './components/ExploreSearch';
@@ -13,7 +14,7 @@ import { TheaterFeedModal } from './components/TheaterFeedModal';
 import { searchVideosExtended } from './services/redgifs';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history'>('single');
+  const [activeTab, setActiveTab] = useState<'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history'>('discover');
   const [selectedCreator, setSelectedCreator] = useState<{ username: string; timestamp: number }>({
     username: 'namiblossom',
     timestamp: Date.now()
@@ -198,6 +199,19 @@ export default function App() {
 
       {/* Contenido principal */}
       <main className="max-w-5xl mx-auto px-4 py-10">
+        {activeTab === 'discover' && (
+          <DiscoverHub
+            onOpenLightbox={handleOpenLightbox}
+            onOpenTheater={handleOpenTheater}
+            onSelectCreator={handleOpenCreator}
+            onSelectTag={handleOpenTag}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
+            showToast={showToast}
+            onSuccessDownload={handleSuccessDownload}
+          />
+        )}
+
         {activeTab === 'single' && (
           <SingleDownloader
             onSuccessDownload={handleSuccessDownload}

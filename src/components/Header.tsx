@@ -2,8 +2,8 @@ import React from 'react';
 import { Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
-  setActiveTab: (tab: 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history') => void;
+  activeTab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
+  setActiveTab: (tab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history') => void;
   historyCount: number;
   favoritesCount?: number;
   onOpenInstallModal?: () => void;
@@ -65,6 +65,15 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Navigation Tabs & Actions */}
         <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-2 overflow-x-auto no-scrollbar max-w-full pb-0.5">
           <nav className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10 shrink-0 overflow-x-auto no-scrollbar" aria-label="Pestañas principales">
+            <button
+              type="button"
+              onClick={() => setActiveTab('discover')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer shrink-0 ${
+                activeTab === 'discover' ? 'bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white shadow-md shadow-pink-600/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-pink-400" /> <span>Novedades</span>
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab('single')}
