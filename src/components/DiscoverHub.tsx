@@ -597,80 +597,59 @@ export const DiscoverHub: React.FC<DiscoverHubProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn pb-16">
-      {/* Banner Principal de Novedades & Descubrimiento */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#181326] via-[#12141c] to-[#1f101d] border border-white/10 p-6 sm:p-8 shadow-2xl shadow-purple-950/20">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-72 h-72 bg-gradient-to-bl from-pink-600/20 via-purple-600/10 to-transparent blur-3xl rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-60 h-60 bg-gradient-to-tr from-red-600/20 via-transparent to-transparent blur-3xl rounded-full pointer-events-none" />
+      {/* Selector de Secciones Compacto */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#12141c]/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg">
+        <button
+          type="button"
+          onClick={() => setActiveSection('latest_videos')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer ${
+            activeSection === 'latest_videos'
+              ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-md shadow-red-600/30'
+              : 'bg-white/5 hover:bg-white/10 text-slate-300'
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          <span>Últimos Subidos</span>
+        </button>
 
-        <div className="relative z-10 space-y-4 max-w-3xl">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-red-500/15 via-pink-500/15 to-purple-500/15 border border-pink-500/30 px-3.5 py-1.5 rounded-full text-xs font-black text-pink-300 shadow-md">
-            <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" />
-            <span>CENTRO DE NOVEDADES & TOP CREADORES</span>
-          </div>
+        <button
+          type="button"
+          onClick={() => setActiveSection('top_creators')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer ${
+            activeSection === 'top_creators'
+              ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30'
+              : 'bg-white/5 hover:bg-white/10 text-slate-300'
+          }`}
+        >
+          <Flame className="w-4 h-4 text-yellow-300" />
+          <span>Mejores Creadores</span>
+        </button>
 
-          <h1 className="text-3xl sm:text-5xl font-black font-display tracking-tight text-white leading-tight">
-            Descubre todo lo <span className="bg-gradient-to-r from-red-400 via-pink-400 to-purple-400 bg-clip-text text-transparent">nuevo y viral</span> de RedGIFs
-          </h1>
+        <button
+          type="button"
+          onClick={() => setActiveSection('trending_creators')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer ${
+            activeSection === 'trending_creators'
+              ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-md shadow-pink-600/30'
+              : 'bg-white/5 hover:bg-white/10 text-slate-300'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-300" />
+          <span>Creadores Emergentes</span>
+        </button>
 
-          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed max-w-2xl">
-            Explora las últimas publicaciones subidas en tiempo real, catálogos completos de creadores con paginación ilimitada y producciones destacadas con audio HD.
-          </p>
-
-          {/* Selector de Secciones Principales */}
-          <div className="pt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveSection('latest_videos')}
-              className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-md ${
-                activeSection === 'latest_videos'
-                  ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-red-600/30 ring-2 ring-red-500/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-              }`}
-            >
-              <Clock className="w-4 h-4" />
-              <span>🆕 Últimos Subidos</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('top_creators')}
-              className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-md ${
-                activeSection === 'top_creators'
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-purple-600/30 ring-2 ring-purple-500/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-              }`}
-            >
-              <Flame className="w-4 h-4 text-yellow-300" />
-              <span>👑 Mejores Creadores</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('trending_creators')}
-              className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-md ${
-                activeSection === 'trending_creators'
-                  ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-pink-600/30 ring-2 ring-pink-500/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 text-emerald-300" />
-              <span>⚡ Creadores Emergentes</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('sound_fresh')}
-              className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer shadow-md ${
-                activeSection === 'sound_fresh'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/40'
-                  : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'
-              }`}
-            >
-              <Volume2 className="w-4 h-4 text-emerald-300" />
-              <span>🎵 Novedades con Audio</span>
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveSection('sound_fresh')}
+          className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-transform active:scale-95 cursor-pointer ${
+            activeSection === 'sound_fresh'
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30'
+              : 'bg-white/5 hover:bg-white/10 text-slate-300'
+          }`}
+        >
+          <Volume2 className="w-4 h-4 text-emerald-300" />
+          <span>Novedades con Audio</span>
+        </button>
       </div>
 
       {/* ========================================================================= */}

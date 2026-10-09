@@ -550,19 +550,9 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-24">
-      {/* Hero & Buscador Principal */}
-      <div className="text-center space-y-4 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5" /> EXPLORADOR Y BUSCADOR PROFESIONAL
-        </div>
-        <h2 className="text-3xl sm:text-4xl font-black font-display tracking-tight text-white">
-          Busca cualquier video en máxima resolución
-        </h2>
-        <p className="text-slate-400 text-xs sm:text-sm">
-          Busca términos en español o inglés, combina con <span className="text-emerald-400 font-bold">+</span>, excluye con <span className="text-red-400 font-bold">-</span> y navega página por página.
-        </p>
-
+    <div className="space-y-4 animate-fadeIn pb-24">
+      {/* Buscador Principal Compacto */}
+      <div className="max-w-3xl mx-auto space-y-3">
         {/* Input de Búsqueda con Autocompletado */}
         <div ref={searchContainerRef} className="relative">
           <form onSubmit={handleFormSubmit} className="relative flex items-center shadow-2xl shadow-red-600/10 rounded-2xl overflow-hidden border border-white/15 bg-[#12141c] focus-within:border-red-500/80 transition-all duration-300">
