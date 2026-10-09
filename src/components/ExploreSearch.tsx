@@ -154,6 +154,10 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialTag || '');
   const [activeTag, setActiveTag] = useState<string>(initialTag || 'trending');
+  const [activeSearchTerm, setActiveSearchTerm] = useState<string>(initialTag ? initialTag.trim().replace(/^#/, '') : 'trending');
+  const activeSearchTermRef = useRef<string>(initialTag ? initialTag.trim().replace(/^#/, '') : 'trending');
+  const lastHandledTimestampRef = useRef<number | null>(null);
+
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -231,8 +235,13 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Carga inicial automática de tendencias o tag inicial
+  // Carga inicial automática de tendencias o tag inicial solo en navegación externa
   useEffect(() => {
+    if (tagTimestamp !== undefined && lastHandledTimestampRef.current === tagTimestamp) {
+      return;
+    }
+    lastHandledTimestampRef.current = tagTimestamp || 0;
+
     let timer: number | null = null;
     if (initialTag) {
       const cleanTag = initialTag.trim().replace(/^#/, '');
@@ -310,6 +319,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   const executeSearch = async (query: string, page = 1, append = false, sortOrder?: 'trending' | 'top' | 'latest') => {
     const term = query.trim() || 'trending';
+    setActiveSearchTerm(term);
+    activeSearchTermRef.current = term;
     setShowSuggestions(false);
     setIsSearching(true);
 
@@ -350,7 +361,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   const goToPage = (pageNumber: number) => {
     if (pageNumber < 1 || pageNumber > totalPages || pageNumber === currentPage || isSearching) return;
-    const term = searchQuery.trim() || activeTag || 'trending';
+    const term = activeSearchTermRef.current || activeTag || 'trending';
     executeSearch(term, pageNumber, false);
     // Scroll suave a la cabecera de resultados
     setTimeout(() => {

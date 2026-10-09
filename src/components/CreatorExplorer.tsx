@@ -270,8 +270,15 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     showToast(`Buscando @${clean} en SimpCity...`);
   };
 
+  const lastHandledTimestampRef = useRef<number | null>(null);
+
   // Cargar creador inicial o cuando cambia el timestamp
   useEffect(() => {
+    if (creatorTimestamp !== undefined && lastHandledTimestampRef.current === creatorTimestamp) {
+      return;
+    }
+    lastHandledTimestampRef.current = creatorTimestamp || 0;
+
     if (initialUsername) {
       const clean = initialUsername.trim().replace(/^@/, '');
       setUsernameInput(clean);

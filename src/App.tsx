@@ -570,7 +570,7 @@ export default function App() {
             initialTag={selectedTag.tag}
             tagTimestamp={selectedTag.timestamp}
             onUpdateQuery={(q) => {
-              setSelectedTag({ tag: q, timestamp: Date.now() });
+              setSelectedTag(prev => ({ ...prev, tag: q }));
             }}
             onOpenTheater={handleOpenTheater}
             onToggleFavorite={handleToggleFavorite}
