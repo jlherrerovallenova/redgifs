@@ -71,14 +71,6 @@ const POPULAR_TAGS = [
   { label: '✨ Modelo', query: 'model' },
 ];
 
-const BOOLEAN_PRESETS = [
-  { label: '💃 Baile + 🏋️ Fitness', query: 'dance + fitness' },
-  { label: '🏖️ Playa - 🎬 Compilación', query: 'beach -compilation' },
-  { label: '🎮 Gaming + 🎭 Cosplay', query: 'gaming + cosplay' },
-  { label: '✨ Model + ⭐ Viral', query: 'model + viral' },
-  { label: '🎵 Sound + 💃 Dance', query: 'sound + dance' }
-];
-
 function getVisiblePageNumbers(current: number, total: number, maxVisible = 5): (number | string)[] {
   if (total <= maxVisible + 2) {
     return Array.from({ length: total }, (_, i) => i + 1);
@@ -677,23 +669,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             >
               <Minus className="w-3 h-3" /> NOT
             </button>
-          </div>
-
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1">
-            <span className="text-slate-500 font-semibold mr-1">Presets:</span>
-            {BOOLEAN_PRESETS.map((p) => (
-              <button
-                key={p.query}
-                type="button"
-                onClick={() => {
-                  setSearchQuery(p.query);
-                  executeSearch(p.query, 1, false);
-                }}
-                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg border border-white/10 transition-colors shrink-0 cursor-pointer font-medium"
-              >
-                {p.label}
-              </button>
-            ))}
           </div>
         </div>
 
