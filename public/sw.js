@@ -1,4 +1,4 @@
-const CACHE_NAME = 'redgifs-pro-v1.1';
+const CACHE_NAME = 'redgifs-pro-v1.2-' + Date.now();
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -17,7 +17,14 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activación: Limpieza de caches antiguos
+// Mensaje para forzar activación inmediata cuando hay actualización
+self.addEventListener('message', (event) => {
+  if (event.data && (event.data.type === 'SKIP_WAITING' || event.data === 'skipWaiting')) {
+    self.skipWaiting();
+  }
+});
+
+// Activación: Limpieza de caches antiguos y tomar control inmediato
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -36,18 +43,19 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. NO cachear peticiones a la API de RedGIFs ni streams de video para evitar saturar memoria
+  // 1. NO cachear peticiones de verificación de versión, APIs externas ni streams de video
   if (
+    url.pathname === '/version.json' ||
     url.pathname.startsWith('/api/redgifs') ||
     url.pathname.startsWith('/media-proxy') ||
     url.hostname.includes('redgifs.com') ||
     url.hostname.includes('allorigins.win') ||
     event.request.destination === 'video'
   ) {
-    return; // Dejar pasar a la red directamente
+    return; // Dejar pasar a la red directamente sin tocar cache
   }
 
-  // 2. Estrategia Stale-While-Revalidate para fuentes, scripts, estilos y HTML
+  // 2. Estrategia Stale-While-Revalidate para HTML, CSS, JS e iconos
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request)
@@ -66,7 +74,7 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Si no hay red y no está en caché, devolver fallback para navegación
+          // Si no hay red y no está en caché, fallback a la página principal
           if (event.request.mode === 'navigate') {
             return caches.match('/index.html');
           }

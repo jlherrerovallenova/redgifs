@@ -14,6 +14,8 @@ import { InstallPwaModal } from './components/InstallPwaModal';
 import { TheaterFeedModal } from './components/TheaterFeedModal';
 import { SaveToListModal } from './components/SaveToListModal';
 import { TabletBottomDock } from './components/TabletBottomDock';
+import { UpdateNotificationBanner } from './components/UpdateNotificationBanner';
+import { useAppUpdate } from './hooks/useAppUpdate';
 import { searchVideosExtended } from './services/redgifs';
 
 type TabType = 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
@@ -57,6 +59,15 @@ export default function App() {
   });
   const [prefilledBatchUrls, setPrefilledBatchUrls] = useState<string>('');
   const [navHistory, setNavHistory] = useState<NavState[]>([]);
+
+  // Detección automática de actualizaciones y nuevas versiones
+  const {
+    updateAvailable,
+    latestVersionInfo,
+    isUpdating,
+    applyUpdate,
+    dismissUpdate
+  } = useAppUpdate();
 
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [theaterState, setTheaterState] = useState<{
@@ -409,6 +420,15 @@ export default function App() {
       {/* Luces de ambiente */}
       <div className="fixed top-[-100px] left-[20%] w-[500px] h-[500px] bg-red-600/10 blur-[130px] rounded-full pointer-events-none" />
       <div className="fixed top-[300px] right-[15%] w-[450px] h-[450px] bg-purple-600/10 blur-[130px] rounded-full pointer-events-none" />
+
+      {/* Banner flotante de aviso de actualización disponible */}
+      <UpdateNotificationBanner
+        isOpen={updateAvailable}
+        versionInfo={latestVersionInfo}
+        isUpdating={isUpdating}
+        onApplyUpdate={applyUpdate}
+        onDismiss={dismissUpdate}
+      />
 
       {/* Header modular con soporte de retroceso */}
       <Header

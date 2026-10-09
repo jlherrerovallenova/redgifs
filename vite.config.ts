@@ -1,5 +1,30 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
+import path from 'path';
+
+const currentBuildTime = new Date().toISOString();
+
+function versionPlugin() {
+  return {
+    name: 'version-generator',
+    buildStart() {
+      const versionData = {
+        version: '1.2.0',
+        buildTime: currentBuildTime,
+        timestamp: Date.now()
+      };
+      const publicDir = path.resolve(__dirname, 'public');
+      if (!fs.existsSync(publicDir)) {
+        fs.mkdirSync(publicDir, { recursive: true });
+      }
+      fs.writeFileSync(
+        path.join(publicDir, 'version.json'),
+        JSON.stringify(versionData, null, 2)
+      );
+    }
+  };
+}
 
 const proxyConfig = {
   '/api/redgifs': {
@@ -41,7 +66,10 @@ const proxyConfig = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), versionPlugin()],
+  define: {
+    __APP_BUILD_TIME__: JSON.stringify(currentBuildTime)
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',
