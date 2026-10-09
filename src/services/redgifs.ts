@@ -512,14 +512,12 @@ export async function searchVideosExtended(
       params.append('order', order);
     }
   } else {
-    // RedGIFs v2 API filtra videos mediante 'tags' y 'query'
-    params.append('tags', parsed.primaryTerm);
+    // RedGIFs v2 API búsqueda completa en catálogo mediante search_text y query
+    params.append('search_text', parsed.primaryTerm);
     params.append('query', parsed.primaryTerm);
   }
 
-  // Solicitamos elementos adicionales para asegurar que tras el filtrado estricto la página quede completa
-  const fetchCount = Math.max(count * 2, 40);
-  params.append('count', String(fetchCount));
+  params.append('count', String(count));
   params.append('page', String(page));
 
   const data = await requestRedGifsJson<any>(`/gifs/search?${params.toString()}`, {
@@ -550,7 +548,7 @@ export async function searchVideosExtended(
     };
   });
 
-  // Filtro estricto global (excluye hombres solos, gays, dicki, etc.)
+  // Filtro estricto global (excluye hombres solos, gays, dicki, creadores bloqueados, etc.)
   items = items.filter(isContentAllowed);
 
   // Filtrado booleano de usuario (+ / -)
@@ -558,11 +556,14 @@ export async function searchVideosExtended(
     items = items.filter(item => matchBooleanFilter(item, parsed));
   }
 
+  const total = Number(data.total) || items.length;
+  const calculatedPages = Math.max(1, Math.ceil(total / count));
+
   return {
     items: items.slice(0, count),
     page: Number(data.page) || page,
-    pages: Number(data.pages) || 1,
-    total: Number(data.total) || items.length
+    pages: Math.max(calculatedPages, Number(data.pages) || 1),
+    total
   };
 }
 
