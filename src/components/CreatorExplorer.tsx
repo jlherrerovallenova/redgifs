@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   User,
   CheckCircle2,
@@ -34,6 +34,7 @@ import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
   getCreatorFeed,
   fetchTopCreatorVideoUrls,
+  searchCreatorsPaginated,
   getVideoInfo,
   downloadVideoFile
 } from '../services/redgifs';
@@ -128,6 +129,50 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   const [hdOnlyFilter, setHdOnlyFilter] = useState(false);
   const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'ultralong'>('all');
   const [keywordFilter, setKeywordFilter] = useState('');
+
+  // Búsqueda parcial y sugerencias en tiempo real
+  const [matchingCreators, setMatchingCreators] = useState<UserProfile[]>([]);
+  const [liveSuggestions, setLiveSuggestions] = useState<UserProfile[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchingMatching, setIsSearchingMatching] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar sugerencias al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Autocompletado en vivo mientras se escribe el nombre o parte del nombre
+  useEffect(() => {
+    const clean = usernameInput.trim().replace(/^@/, '');
+    if (clean.length < 2) {
+      setLiveSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchCreatorsPaginated(clean, 6, 1);
+        if (res.items.length > 0) {
+          setLiveSuggestions(res.items);
+          setShowSuggestions(true);
+        } else {
+          setLiveSuggestions([]);
+        }
+      } catch {
+        setLiveSuggestions([]);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [usernameInput]);
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -235,6 +280,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   ) => {
     const clean = targetUser.trim().replace(/^@/, '');
     if (!clean) return;
+    setShowSuggestions(false);
 
     if (page === 1) {
       setIsLoading(true);
@@ -247,6 +293,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
       const res = await getCreatorFeed(clean, sortOrder, 24, page);
       if (res.user) {
         setProfile(res.user);
+        setMatchingCreators([]);
       }
       if (append) {
         setVideos(prev => {
@@ -265,10 +312,23 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
         saveRecentCreator(clean);
       }
     } catch (err: any) {
-      showToast(`Error al cargar el creador @${clean}: ${err.message || 'No encontrado'}`);
+      // Si el creador exacto no existe o no tiene videos directos, buscar coincidencias parciales
+      try {
+        setIsSearchingMatching(true);
+        const searchRes = await searchCreatorsPaginated(clean, 16, 1);
+        if (searchRes.items.length > 0) {
+          setMatchingCreators(searchRes.items);
+          setProfile(null);
+          setVideos([]);
+          showToast(`Mostrando ${searchRes.items.length} creadores que coinciden con "${clean}"`);
+          return;
+        }
+      } catch {}
+      showToast(`No se encontró el creador @${clean}`);
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
+      setIsSearchingMatching(false);
     }
   };
 
@@ -276,6 +336,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     e.preventDefault();
     const clean = usernameInput.trim().replace(/^@/, '');
     if (!clean) return;
+    setShowSuggestions(false);
     loadCreator(clean, order, 1, false);
   };
 
@@ -455,44 +516,106 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
           Explora perfiles verificados, filtra sus mejores producciones y descarga o compila decenas de videos en un solo clic.
         </p>
 
-        {/* Input de Búsqueda de Usuario */}
-        <form onSubmit={handleSearchSubmit} className="relative flex items-center shadow-2xl shadow-purple-600/10 rounded-2xl overflow-hidden border border-white/15 bg-[#12141c] focus-within:border-purple-500/80 transition-all duration-300">
-          <div className="pl-4 text-purple-400 font-bold text-lg">
-            @
-          </div>
-          <input
-            type="text"
-            value={usernameInput}
-            aria-label="Nombre del creador a explorar"
-            onChange={(e) => setUsernameInput(e.target.value)}
-            placeholder="Introduce el nombre del creador (ej. namiblossom, brazzers, ersties)..."
-            className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
-          />
-          {usernameInput && (
-            <button
-              type="button"
-              onClick={() => setUsernameInput('')}
-              aria-label="Limpiar nombre del creador"
-              className="p-2 text-slate-400 hover:text-white transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={isLoading}
-            aria-label="Explorar perfil del creador"
-            className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin" /> Cargando...
-              </span>
-            ) : (
-              'Explorar Perfil'
+        {/* Input de Búsqueda de Usuario con Autocompletado en Vivo */}
+        <div ref={searchContainerRef} className="relative z-30">
+          <form onSubmit={handleSearchSubmit} className="relative flex items-center shadow-2xl shadow-purple-600/10 rounded-2xl overflow-hidden border border-white/15 bg-[#12141c] focus-within:border-purple-500/80 transition-all duration-300">
+            <div className="pl-4 text-purple-400 font-bold text-lg">
+              @
+            </div>
+            <input
+              type="text"
+              value={usernameInput}
+              aria-label="Nombre del creador a explorar"
+              onChange={(e) => setUsernameInput(e.target.value)}
+              onFocus={() => {
+                if (liveSuggestions.length > 0) setShowSuggestions(true);
+              }}
+              placeholder="Introduce nombre completo o parte del nombre (ej. nami, brazz, erst, candy)..."
+              className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
+            />
+            {usernameInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUsernameInput('');
+                  setLiveSuggestions([]);
+                  setShowSuggestions(false);
+                }}
+                aria-label="Limpiar nombre del creador"
+                className="p-2 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isLoading || isSearchingMatching}
+              aria-label="Explorar perfil del creador"
+              className="bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:opacity-90 text-white font-bold px-6 py-3.5 text-sm transition-transform active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
+            >
+              {isLoading || isSearchingMatching ? (
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Buscando...
+                </span>
+              ) : (
+                'Buscar Creador'
+              )}
+            </button>
+          </form>
+
+          {/* Desplegable de Sugerencias en Vivo mientras se escribe */}
+          {showSuggestions && liveSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-[#10121a]/98 backdrop-blur-2xl border border-purple-500/40 rounded-2xl shadow-2xl p-2 z-50 animate-fadeIn text-left max-h-80 overflow-y-auto">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-purple-400 px-3 py-1 flex items-center justify-between border-b border-white/5 pb-1.5 mb-1">
+                <span>Coincidencias para "{usernameInput}":</span>
+                <span className="text-[10px] text-slate-400 font-mono">{liveSuggestions.length} encontrados</span>
+              </div>
+              <div className="space-y-1">
+                {liveSuggestions.map((sug) => (
+                  <button
+                    key={sug.username}
+                    type="button"
+                    onClick={() => {
+                      setUsernameInput(sug.username);
+                      setShowSuggestions(false);
+                      setMatchingCreators([]);
+                      loadCreator(sug.username, order, 1, false);
+                    }}
+                    className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group text-left"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {sug.profileImageUrl ? (
+                        <img
+                          src={sug.profileImageUrl}
+                          alt={sug.name || sug.username}
+                          className="w-9 h-9 rounded-xl object-cover border border-purple-400/30 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center font-bold text-sm shrink-0">
+                          {(sug.name || sug.username).charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-white group-hover:text-purple-300 flex items-center gap-1 truncate">
+                          <span>{sug.name || sug.username}</span>
+                          {sug.verified && <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                        </div>
+                        <div className="text-[11px] text-purple-400 font-mono truncate">
+                          @{sug.username}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right text-[11px] text-slate-400 shrink-0 ml-2">
+                      <div className="font-semibold text-slate-300">{sug.followers.toLocaleString()} fans</div>
+                      <div className="text-[10px] text-slate-500">{sug.gifs.toLocaleString()} videos</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Creadores Destacados / Populares */}
         <div className="pt-2">
@@ -578,6 +701,81 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
           </div>
         )}
       </div>
+
+      {/* Sección de Creadores Coincidentes por búsqueda parcial */}
+      {matchingCreators.length > 0 && !profile && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="bg-[#12141c] border border-purple-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400 shrink-0">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-white text-sm sm:text-base">
+                  Creadores que coinciden con "{usernameInput}"
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Selecciona cualquiera de estos {matchingCreators.length} perfiles para ver su catálogo completo de videos:
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {matchingCreators.map((creator) => (
+              <div
+                key={creator.username}
+                onClick={() => {
+                  setUsernameInput(creator.username);
+                  setMatchingCreators([]);
+                  loadCreator(creator.username, order, 1, false);
+                }}
+                className="bg-[#12141c] border border-white/10 hover:border-purple-500/60 rounded-2xl p-4 flex flex-col justify-between space-y-3 cursor-pointer group hover:shadow-xl hover:shadow-purple-950/30 transition-all active:scale-98"
+              >
+                <div className="flex items-start gap-3">
+                  {creator.profileImageUrl ? (
+                    <img
+                      src={creator.profileImageUrl}
+                      alt={creator.name || creator.username}
+                      className="w-12 h-12 rounded-2xl object-cover border border-purple-400/30 shrink-0 group-hover:scale-105 transition-transform"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-pink-600 text-white flex items-center justify-center font-black text-lg shrink-0">
+                      {(creator.name || creator.username).charAt(0).toUpperCase()}
+                    </div>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-white text-sm flex items-center gap-1 group-hover:text-purple-300 truncate">
+                      <span>{creator.name || creator.username}</span>
+                      {creator.verified && <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                    </h4>
+                    <p className="text-xs text-purple-400 font-mono truncate">@{creator.username}</p>
+                    {creator.description && (
+                      <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-tight">
+                        {creator.description}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400 font-medium">
+                  <span>{creator.followers.toLocaleString()} fans</span>
+                  <span>{creator.gifs.toLocaleString()} videos</span>
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full py-2 rounded-xl bg-purple-600/20 group-hover:bg-purple-600 text-purple-300 group-hover:text-white border border-purple-500/30 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Ver Catálogo Completo</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Banner y Tarjeta de Perfil de Creador */}
       {profile && (
