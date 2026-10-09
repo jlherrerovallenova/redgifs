@@ -121,10 +121,13 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     showToast(`Diseño cambiado a ${cols} columnas`);
   };
 
-  // Ordenación y filtros
-  const [order, setOrder] = useState<'best' | 'recent' | 'trending'>('best');
+  // Ordenación y filtros avanzados
+  const [order, setOrder] = useState<'best' | 'recent' | 'trending'>('recent');
+  const [sortType, setSortType] = useState<'recent' | 'longest' | 'shortest' | 'best' | 'views' | 'likes' | 'trending'>('recent');
   const [audioFilter, setAudioFilter] = useState<'all' | 'audio' | 'mute'>('all');
-  const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
+  const [hdOnlyFilter, setHdOnlyFilter] = useState(false);
+  const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'ultralong'>('all');
+  const [keywordFilter, setKeywordFilter] = useState('');
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -276,9 +279,12 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     loadCreator(clean, order, 1, false);
   };
 
-  const handleOrderChange = (newOrder: 'best' | 'recent' | 'trending') => {
-    setOrder(newOrder);
-    loadCreator(activeUsername, newOrder, 1, false);
+  const handleSortChange = (newSort: 'recent' | 'longest' | 'shortest' | 'best' | 'views' | 'likes' | 'trending') => {
+    setSortType(newSort);
+    if (newSort === 'recent' || newSort === 'best' || newSort === 'trending') {
+      setOrder(newSort);
+      loadCreator(activeUsername, newSort, 1, false);
+    }
   };
 
   const handleLoadMore = () => {
@@ -290,22 +296,51 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   const filteredVideos = useMemo(() => {
     let list = [...videos];
 
+    // 1. Búsqueda por palabra clave o etiqueta
+    if (keywordFilter.trim()) {
+      const q = keywordFilter.toLowerCase().trim();
+      list = list.filter(item =>
+        item.title.toLowerCase().includes(q) ||
+        (item.tags && item.tags.some(t => t.toLowerCase().includes(q)))
+      );
+    }
+
+    // 2. Filtro de Audio
     if (audioFilter === 'audio') {
       list = list.filter(item => item.hasAudio === true);
     } else if (audioFilter === 'mute') {
       list = list.filter(item => item.hasAudio === false);
     }
 
+    // 3. Filtro HD
+    if (hdOnlyFilter) {
+      list = list.filter(item => Boolean(item.hd_url));
+    }
+
+    // 4. Filtro de Duración
     if (durationFilter === 'short') {
       list = list.filter(item => item.duration < 15);
     } else if (durationFilter === 'medium') {
       list = list.filter(item => item.duration >= 15 && item.duration <= 30);
     } else if (durationFilter === 'long') {
       list = list.filter(item => item.duration > 30);
+    } else if (durationFilter === 'ultralong') {
+      list = list.filter(item => item.duration >= 60);
+    }
+
+    // 5. Ordenaciones especiales en cliente
+    if (sortType === 'longest') {
+      list.sort((a, b) => b.duration - a.duration);
+    } else if (sortType === 'shortest') {
+      list.sort((a, b) => a.duration - b.duration);
+    } else if (sortType === 'views') {
+      list.sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else if (sortType === 'likes') {
+      list.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     }
 
     return list;
-  }, [videos, audioFilter, durationFilter]);
+  }, [videos, keywordFilter, audioFilter, hdOnlyFilter, durationFilter, sortType]);
 
   // Compilación rápida del perfil
   const handleQuickCompile = async (limit: number) => {
@@ -754,48 +789,99 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
         </div>
       )}
 
-      {/* Barra de Filtros y Orden de Videos */}
-      <div className="bg-[#12141c] border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Pestañas de Ordenación */}
-          <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/10">
+      {/* Barra de Filtros y Orden de Videos Avanzada */}
+      <div className="bg-[#12141c] border border-white/10 rounded-2xl p-3.5 sm:p-4 space-y-3.5 shadow-lg">
+        {/* Fila 1: Pestañas de Ordenación (Más Nuevo, Más Largo, Más Corto, etc.) */}
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+          {/* Selector de Orden */}
+          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10 overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
-              onClick={() => handleOrderChange('best')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                order === 'best'
+              onClick={() => handleSortChange('recent')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'recent'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Mostrar primero las publicaciones más recientes"
             >
-              <Flame className="w-3.5 h-3.5" /> Más Vistos (Top)
+              <Clock className="w-3.5 h-3.5 text-purple-300" />
+              <span>Más Nuevo</span>
             </button>
+
             <button
               type="button"
-              onClick={() => handleOrderChange('recent')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                order === 'recent'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+              onClick={() => handleSortChange('longest')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'longest'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md shadow-pink-600/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Ordenar por videos de mayor duración a menor duración"
             >
-              <Clock className="w-3.5 h-3.5" /> Recientes
+              <Clock className="w-3.5 h-3.5 text-pink-400" />
+              <span>Más Largo</span>
             </button>
+
             <button
               type="button"
-              onClick={() => handleOrderChange('trending')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                order === 'trending'
+              onClick={() => handleSortChange('shortest')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'shortest'
+                  ? 'bg-gradient-to-r from-pink-600 to-red-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Ordenar por videos de menor duración (clips rápidos)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+              <span>Más Corto</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSortChange('best')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'best'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
+              title="Más vistos y mejor valorados"
             >
-              <TrendingUp className="w-3.5 h-3.5" /> Tendencias
+              <Flame className="w-3.5 h-3.5 text-yellow-400" />
+              <span>Top / Más Visto</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSortChange('likes')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'likes'
+                  ? 'bg-pink-600 text-white shadow-md shadow-pink-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Ordenar por mayor cantidad de 'Me gusta'"
+            >
+              <Heart className="w-3.5 h-3.5 text-pink-300 fill-pink-400/40" />
+              <span>Más Likes</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSortChange('trending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                sortType === 'trending'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Tendencias del momento"
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-red-400" />
+              <span>Tendencias</span>
             </button>
           </div>
 
           {/* Acciones y Modo Selección */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto justify-between lg:justify-end">
             {onOpenTheater && filteredVideos.length > 0 && (
               <button
                 type="button"
@@ -821,7 +907,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               }`}
             >
               <CheckSquare className="w-3.5 h-3.5" />
-              <span>{selectMode ? 'Cancelar selección' : 'Seleccionar en lote'}</span>
+              <span>{selectMode ? 'Cancelar' : 'Seleccionar lote'}</span>
             </button>
 
             {/* Selector de Columnas */}
@@ -844,60 +930,123 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               ))}
             </div>
 
-            <span className="text-xs text-slate-400 font-semibold">
+            <span className="text-xs text-slate-400 font-semibold bg-white/5 px-2 py-1 rounded-lg border border-white/5">
               {filteredVideos.length} {filteredVideos.length === 1 ? 'video' : 'videos'}
-              {totalCount > 0 && ` (de ${totalCount.toLocaleString()})`}
+              {totalCount > 0 && ` / ${totalCount.toLocaleString()}`}
             </span>
           </div>
         </div>
 
-        {/* Filtros Rápidos de Audio y Duración */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5 text-xs">
-          <span className="text-slate-500 font-semibold mr-1">Filtrar:</span>
-          <button
-            type="button"
-            onClick={() => setAudioFilter(audioFilter === 'audio' ? 'all' : 'audio')}
-            className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
-              audioFilter === 'audio'
-                ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300 font-bold'
-                : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
-            }`}
-          >
-            <Volume2 className="w-3 h-3" /> Con sonido
-          </button>
-          <button
-            type="button"
-            onClick={() => setAudioFilter(audioFilter === 'mute' ? 'all' : 'mute')}
-            className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
-              audioFilter === 'mute'
-                ? 'bg-white/20 border-white/40 text-white font-bold'
-                : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
-            }`}
-          >
-            <VolumeX className="w-3 h-3" /> Silencio
-          </button>
-          <button
-            type="button"
-            onClick={() => setDurationFilter(durationFilter === 'short' ? 'all' : 'short')}
-            className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
-              durationFilter === 'short'
-                ? 'bg-purple-600/30 border-purple-500/50 text-purple-300 font-bold'
-                : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
-            }`}
-          >
-            &lt;15s
-          </button>
-          <button
-            type="button"
-            onClick={() => setDurationFilter(durationFilter === 'long' ? 'all' : 'long')}
-            className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
-              durationFilter === 'long'
-                ? 'bg-purple-600/30 border-purple-500/50 text-purple-300 font-bold'
-                : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
-            }`}
-          >
-            &gt;30s
-          </button>
+        {/* Fila 2: Buscador en tiempo real dentro del creador + Filtros de Audio, HD y Duración */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2.5 border-t border-white/5 text-xs">
+          {/* Buscador interno */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-purple-400" />
+            <input
+              type="text"
+              value={keywordFilter}
+              onChange={(e) => setKeywordFilter(e.target.value)}
+              placeholder="Buscar en los videos de este creador por título o tag..."
+              className="w-full bg-black/40 border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-purple-500 transition-colors"
+            />
+            {keywordFilter && (
+              <button
+                type="button"
+                onClick={() => setKeywordFilter('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Filtros de Audio, HD y Duración */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-slate-500 font-semibold mr-0.5">Filtrar:</span>
+            <button
+              type="button"
+              onClick={() => setAudioFilter(audioFilter === 'audio' ? 'all' : 'audio')}
+              className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
+                audioFilter === 'audio'
+                  ? 'bg-emerald-600/25 border-emerald-500/50 text-emerald-300 font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              <Volume2 className="w-3 h-3" /> Audio
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAudioFilter(audioFilter === 'mute' ? 'all' : 'mute')}
+              className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors cursor-pointer ${
+                audioFilter === 'mute'
+                  ? 'bg-white/20 border-white/40 text-white font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              <VolumeX className="w-3 h-3" /> Mudo
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setHdOnlyFilter(!hdOnlyFilter)}
+              className={`px-2.5 py-1 rounded-lg border font-bold transition-colors cursor-pointer ${
+                hdOnlyFilter
+                  ? 'bg-purple-600/30 border-purple-500/50 text-purple-300'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              HD
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDurationFilter(durationFilter === 'short' ? 'all' : 'short')}
+              className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                durationFilter === 'short'
+                  ? 'bg-purple-600/30 border-purple-500/50 text-purple-300 font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              &lt;15s
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDurationFilter(durationFilter === 'medium' ? 'all' : 'medium')}
+              className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                durationFilter === 'medium'
+                  ? 'bg-purple-600/30 border-purple-500/50 text-purple-300 font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              15-30s
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDurationFilter(durationFilter === 'long' ? 'all' : 'long')}
+              className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                durationFilter === 'long'
+                  ? 'bg-purple-600/30 border-purple-500/50 text-purple-300 font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              &gt;30s
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDurationFilter(durationFilter === 'ultralong' ? 'all' : 'ultralong')}
+              className={`px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                durationFilter === 'ultralong'
+                  ? 'bg-pink-600/30 border-pink-500/50 text-pink-300 font-bold'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 border-white/10'
+              }`}
+            >
+              &gt;60s
+            </button>
+          </div>
         </div>
       </div>
 
