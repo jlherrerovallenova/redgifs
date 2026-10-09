@@ -211,6 +211,73 @@ export interface ParsedQuery {
   primaryTerm: string;
 }
 
+// Lista exhaustiva de términos bloqueados para excluir contenido de hombres solos, gay, dicki, etc.
+export const BLOCKED_KEYWORDS_AND_TAGS: string[] = [
+  // Términos de hombres solos y temática gay
+  'gay', 'gays', 'gaysex', 'gayporn', 'gaytube', 'twink', 'twinks', 'shemale', 'ladyboy',
+  'trans', 'transgender', 'femboy', 'trap', 'sissy', 'crossdress', 'crossdresser',
+  'boyonboy', 'boy on boy', 'mm', 'male solo', 'solo male', 'solo guy', 'guy solo',
+  'solo guys', 'guys solo', 'man solo', 'solo man', 'men solo', 'solo men',
+  'male masturbation', 'guy masturbating', 'dude solo', 'solo dude', 'jock', 'jockstrap',
+  'bareback', 'dilf', 'daddy gay', 'gay daddy', 'gay bear', 'bear gay', 'otter gay',
+  'gay sex', 'gay blowjob', 'gay couple', 'gay romance', 'gay hunk', 'gay teen',
+  // Términos anatómicos masculinos explícitos / primeros planos masculinos no deseados
+  'dick', 'dicki', 'dicks', 'penis', 'cock', 'cocks', 'cockring', 'bulge', 'monster cock',
+  'huge cock', 'big cock', 'huge dick', 'big dick', 'cock tribute', 'cock sucker',
+  'cock sucking', 'gloryhole male', 'bbc', 'strapon guy', 'penis pump', 'ballsack',
+  'scrotum', 'foreskin', 'erection solo', 'boner', 'throbbing cock',
+  // Términos en Español
+  'hombre solo', 'hombres solos', 'chico solo', 'chicos solos', 'solo chicos', 'solo hombres',
+  'polla', 'pollas', 'pollon', 'pollón', 'pene', 'penes', 'cipote', 'verga', 'vergas',
+  'pito', 'pitos', 'rabo', 'rabos', 'travesti', 'transexual', 'chico gay', 'chicos gay',
+  'sexo gay', 'maricon', 'maricón', 'marica', 'maricas', 'gay espanol', 'gay español'
+];
+
+/**
+ * Comprueba si un recurso multimedia, creador o tag está permitido y libre de contenido bloqueado.
+ */
+export function isContentAllowed(item: {
+  title?: string;
+  userName?: string;
+  description?: string;
+  tags?: string[];
+}): boolean {
+  if (!item) return false;
+
+  const rawTags = (item.tags || []).map(t => t.toLowerCase().trim());
+  const combinedText = [
+    item.title || '',
+    item.userName || '',
+    item.description || '',
+    ...rawTags
+  ].join(' ').toLowerCase();
+
+  for (const blocked of BLOCKED_KEYWORDS_AND_TAGS) {
+    const cleanBlocked = blocked.toLowerCase().trim();
+
+    // 1. Coincidencia en tags
+    for (const tag of rawTags) {
+      if (tag === cleanBlocked) return false;
+      if (cleanBlocked.length <= 4) {
+        const tagRegex = new RegExp(`\\b${cleanBlocked}\\b`, 'i');
+        if (tagRegex.test(tag)) return false;
+      } else {
+        if (tag.includes(cleanBlocked)) return false;
+      }
+    }
+
+    // 2. Coincidencia en texto combinado (título, username, bio, tags)
+    if (cleanBlocked.length <= 4) {
+      const regex = new RegExp(`\\b${cleanBlocked}\\b`, 'i');
+      if (regex.test(combinedText)) return false;
+    } else {
+      if (combinedText.includes(cleanBlocked)) return false;
+    }
+  }
+
+  return true;
+}
+
 // Diccionario inteligente de sinónimos Español -> Inglés para optimizar búsquedas en RedGIFs
 const SPANISH_SYNONYMS: Record<string, string> = {
   'baile': 'dance',
@@ -330,6 +397,11 @@ export function matchBooleanFilter(
   parsed: ParsedQuery,
   requireHD: boolean = false
 ): boolean {
+  // Primero validar que pase el filtro general estricto
+  if (!isContentAllowed(item)) {
+    return false;
+  }
+
   const itemText = [
     item.title || '',
     item.userName || '',
@@ -384,11 +456,15 @@ export async function getSearchSuggestions(query: string): Promise<TagSuggestion
     });
 
     if (Array.isArray(data)) {
-      return data.slice(0, 10).map((item: any) => ({
-        type: item.type === 'creator' ? 'creator' : 'tag',
-        text: item.text || item.name || '',
-        gifs: Number(item.gifs) || 0
-      }));
+      return data
+        .slice(0, 15)
+        .map((item: any) => ({
+          type: (item.type === 'creator' ? 'creator' : 'tag') as 'tag' | 'creator',
+          text: item.text || item.name || '',
+          gifs: Number(item.gifs) || 0
+        }))
+        .filter(s => isContentAllowed({ title: s.text, tags: [s.text] }))
+        .slice(0, 10);
     }
     return [];
   } catch {
@@ -421,7 +497,9 @@ export async function searchVideosExtended(
     params.append('query', parsed.primaryTerm);
   }
 
-  params.append('count', String(Math.max(count, parsed.excluded.length > 0 ? 36 : count)));
+  // Solicitamos elementos adicionales para asegurar que tras el filtrado estricto la página quede completa
+  const fetchCount = Math.max(count * 2, 40);
+  params.append('count', String(fetchCount));
   params.append('page', String(page));
 
   const data = await requestRedGifsJson<any>(`/gifs/search?${params.toString()}`, {
@@ -452,13 +530,16 @@ export async function searchVideosExtended(
     };
   });
 
-  // Filtrado solo si hay exclusiones (-) o AND explícito (+)
+  // Filtro estricto global (excluye hombres solos, gays, dicki, etc.)
+  items = items.filter(isContentAllowed);
+
+  // Filtrado booleano de usuario (+ / -)
   if (parsed.excluded.length > 0 || (parsed.hasExplicitBoolean && parsed.included.length > 1)) {
     items = items.filter(item => matchBooleanFilter(item, parsed));
   }
 
   return {
-    items,
+    items: items.slice(0, count),
     page: Number(data.page) || page,
     pages: Number(data.pages) || 1,
     total: Number(data.total) || items.length
@@ -555,7 +636,7 @@ export async function getCreatorFeed(
   }
 
   const gifs = Array.isArray(data.gifs) ? data.gifs : [];
-  const items: SearchResultItem[] = gifs.map((g: any) => {
+  const rawItems: SearchResultItem[] = gifs.map((g: any) => {
     const urls = g.urls || {};
     return {
       id: g.id,
@@ -576,6 +657,8 @@ export async function getCreatorFeed(
     };
   });
 
+  const items = rawItems.filter(isContentAllowed);
+
   return {
     user: userProfile,
     items,
@@ -595,7 +678,7 @@ export async function searchCreators(query: string, count = 12): Promise<UserPro
   const token = await getAuthToken();
   const params = new URLSearchParams({
     search_text: clean,
-    count: String(count)
+    count: String(count * 2)
   });
 
   const data = await requestRedGifsJson<any>(`/creators/search?${params.toString()}`, {
@@ -605,22 +688,25 @@ export async function searchCreators(query: string, count = 12): Promise<UserPro
   });
 
   const rawItems = Array.isArray(data.items) ? data.items : [];
-  return rawItems.map((u: any) => ({
-    username: u.username,
-    name: u.name || u.username,
-    description: u.description || undefined,
-    followers: Number(u.followers) || 0,
-    following: Number(u.following) || 0,
-    gifs: Number(u.publishedGifs || u.gifs) || 0,
-    views: Number(u.views) || 0,
-    likes: Number(u.likes) || 0,
-    profileImageUrl: u.profileImageUrl || undefined,
-    profileUrl: u.profileUrl || undefined,
-    url: u.url || `https://www.redgifs.com/users/${u.username}`,
-    verified: Boolean(u.verified),
-    studio: Boolean(u.studio),
-    socialLinks: extractSocialLinks(u)
-  }));
+  return rawItems
+    .map((u: any) => ({
+      username: u.username,
+      name: u.name || u.username,
+      description: u.description || undefined,
+      followers: Number(u.followers) || 0,
+      following: Number(u.following) || 0,
+      gifs: Number(u.publishedGifs || u.gifs) || 0,
+      views: Number(u.views) || 0,
+      likes: Number(u.likes) || 0,
+      profileImageUrl: u.profileImageUrl || undefined,
+      profileUrl: u.profileUrl || undefined,
+      url: u.url || `https://www.redgifs.com/users/${u.username}`,
+      verified: Boolean(u.verified),
+      studio: Boolean(u.studio),
+      socialLinks: extractSocialLinks(u)
+    }))
+    .filter(u => isContentAllowed({ userName: u.username, title: u.name, description: u.description }))
+    .slice(0, count);
 }
 
 /**
