@@ -233,16 +233,36 @@ export const BLOCKED_KEYWORDS_AND_TAGS: string[] = [
   'sexo gay', 'maricon', 'maricón', 'marica', 'maricas', 'gay espanol', 'gay español'
 ];
 
+export function getBlockedCreators(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem('rg_blocked_creators') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function isCreatorBlocked(username?: string): boolean {
+  if (!username) return false;
+  const list = getBlockedCreators();
+  const clean = username.toLowerCase().trim().replace(/^@/, '');
+  return list.some(c => c.toLowerCase().trim().replace(/^@/, '') === clean);
+}
+
 /**
  * Comprueba si un recurso multimedia, creador o tag está permitido y libre de contenido bloqueado.
  */
 export function isContentAllowed(item: {
   title?: string;
   userName?: string;
+  username?: string;
   description?: string;
   tags?: string[];
 }): boolean {
   if (!item) return false;
+
+  // 0. Excluir creadores bloqueados por el usuario
+  if (item.userName && isCreatorBlocked(item.userName)) return false;
+  if (item.username && isCreatorBlocked(item.username)) return false;
 
   const rawTags = (item.tags || []).map(t => t.toLowerCase().trim());
   const combinedText = [

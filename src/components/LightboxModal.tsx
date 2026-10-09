@@ -25,7 +25,8 @@ import {
   Eye,
   Clock,
   ExternalLink,
-  Layers
+  Layers,
+  Ban
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import { searchVideosExtended, getVideoInfo, downloadVideoFile } from '../services/redgifs';
@@ -46,6 +47,7 @@ interface LightboxModalProps {
   onSwitchVideo?: (item: SearchResultItem) => void;
   showToast?: (msg: string) => void;
   onSuccessDownload?: (video: RedGifItem, quality: string, filename: string) => void;
+  onBlockCreator?: (username: string) => void;
 }
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -65,7 +67,8 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   isFavorite,
   onSwitchVideo,
   showToast,
-  onSuccessDownload
+  onSuccessDownload,
+  onBlockCreator
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -433,18 +436,36 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         <div className="p-3 border-b border-white/10 flex items-center justify-between gap-3 bg-[#131622]">
           <div className="flex items-center gap-2 min-w-0">
             {userName && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  if (onSelectCreator) onSelectCreator(userName);
-                }}
-                className="text-purple-300 hover:text-purple-100 font-bold text-xs flex items-center gap-1 bg-purple-500/20 px-2.5 py-1 rounded-lg border border-purple-400/30 shrink-0 cursor-pointer transition-colors shadow-sm"
-                title={`Ver perfil de @${userName}`}
-              >
-                <User className="w-3.5 h-3.5 text-purple-400" />
-                <span>@{userName}</span>
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onSelectCreator) onSelectCreator(userName);
+                  }}
+                  className="text-purple-300 hover:text-purple-100 font-bold text-xs flex items-center gap-1 bg-purple-500/20 hover:bg-purple-500/30 px-2.5 py-1 rounded-lg border border-purple-400/30 shrink-0 cursor-pointer transition-colors shadow-sm"
+                  title={`Ver perfil de @${userName}`}
+                >
+                  <User className="w-3.5 h-3.5 text-purple-400" />
+                  <span>@{userName}</span>
+                </button>
+
+                {onBlockCreator && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`¿Bloquear a @${userName}? Sus videos no volverán a aparecer.`)) {
+                        onBlockCreator(userName);
+                        onClose();
+                      }
+                    }}
+                    className="p-1 rounded-lg bg-red-600/10 hover:bg-red-600/30 text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 transition-all cursor-pointer"
+                    title={`Bloquear y no mostrar más a @${userName}`}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             )}
             <span className="text-xs sm:text-sm font-bold text-slate-200 truncate" title={title}>
               {title || 'Reproducción Ultra-Pro'}

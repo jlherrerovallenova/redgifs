@@ -28,7 +28,8 @@ import {
   ChevronsRight,
   Search,
   X,
-  Tv
+  Tv,
+  Ban
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
@@ -47,6 +48,7 @@ interface DiscoverHubProps {
   isFavorite?: (id: string) => boolean;
   showToast: (msg: string) => void;
   onSuccessDownload?: (video: RedGifItem, quality: string, filename: string) => void;
+  onBlockCreator?: (username: string) => void;
 }
 
 type DiscoverSection = 'latest_videos' | 'top_creators' | 'trending_creators' | 'sound_fresh';
@@ -349,7 +351,8 @@ export const DiscoverHub: React.FC<DiscoverHubProps> = ({
   onToggleFavorite,
   isFavorite,
   showToast,
-  onSuccessDownload
+  onSuccessDownload,
+  onBlockCreator
 }) => {
   const [activeSection, setActiveSection] = useState<DiscoverSection>('latest_videos');
 
@@ -1195,17 +1198,36 @@ export const DiscoverHub: React.FC<DiscoverHubProps> = ({
                     {/* Información y Creador */}
                     <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-between">
                       <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (onSelectCreator) onSelectCreator(item.userName);
-                          }}
-                          className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 truncate max-w-full cursor-pointer hover:underline"
-                          title={`Ver perfil de @${item.userName}`}
-                        >
-                          <User className="w-3 h-3 shrink-0" />
-                          <span className="truncate">@{item.userName}</span>
-                        </button>
+                        <div className="flex items-center justify-between gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onSelectCreator) onSelectCreator(item.userName);
+                            }}
+                            className="text-xs font-bold text-purple-400 hover:text-purple-300 flex items-center gap-1 truncate max-w-[140px] cursor-pointer hover:underline"
+                            title={`Ver perfil de @${item.userName}`}
+                          >
+                            <User className="w-3 h-3 shrink-0" />
+                            <span className="truncate">@{item.userName}</span>
+                          </button>
+
+                          {onBlockCreator && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Bloquear permanentemente a @${item.userName}? No volverás a ver sus videos.`)) {
+                                  onBlockCreator(item.userName);
+                                  setVideos(prev => prev.filter(v => v.userName?.toLowerCase() !== item.userName.toLowerCase()));
+                                }
+                              }}
+                              className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                              title={`Bloquear a @${item.userName}`}
+                            >
+                              <Ban className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
 
                         <h3 className="text-xs font-semibold text-slate-200 line-clamp-2 leading-snug" title={item.title}>
                           {item.title}

@@ -26,7 +26,8 @@ import {
   RotateCw,
   Gauge,
   FlipHorizontal2,
-  PictureInPicture2
+  PictureInPicture2,
+  Ban
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import { getVideoInfo, downloadVideoFile, isIOS } from '../services/redgifs';
@@ -45,6 +46,7 @@ interface TheaterFeedModalProps {
   hasMore?: boolean;
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
+  onBlockCreator?: (username: string) => void;
 }
 
 const SPEED_OPTIONS = [0.5, 1.0, 1.5, 2.0];
@@ -62,7 +64,8 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
   onLoadMore,
   hasMore = false,
   onToggleFavorite,
-  isFavorite
+  isFavorite,
+  onBlockCreator
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(true);
@@ -892,17 +895,34 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
           >
             {/* Creator and Badges */}
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  if (onSelectCreator) onSelectCreator(currentVideo.userName);
-                }}
-                className="text-purple-300 hover:text-purple-100 font-black text-sm flex items-center gap-1.5 bg-purple-600/30 hover:bg-purple-600/50 px-3 py-1 rounded-full border border-purple-400/40 transition-colors cursor-pointer shadow-md"
-              >
-                <User className="w-3.5 h-3.5 text-purple-300" />
-                <span>@{currentVideo.userName}</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onSelectCreator) onSelectCreator(currentVideo.userName);
+                  }}
+                  className="text-purple-300 hover:text-purple-100 font-black text-sm flex items-center gap-1.5 bg-purple-600/30 hover:bg-purple-600/50 px-3 py-1 rounded-full border border-purple-400/40 transition-colors cursor-pointer shadow-md"
+                >
+                  <User className="w-3.5 h-3.5 text-purple-300" />
+                  <span>@{currentVideo.userName}</span>
+                </button>
+
+                {onBlockCreator && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`¿Bloquear a @${currentVideo.userName}? Sus videos se eliminarán del feed.`)) {
+                        onBlockCreator(currentVideo.userName);
+                      }
+                    }}
+                    className="p-1.5 rounded-full bg-red-600/20 hover:bg-red-600/40 text-red-300 border border-red-500/30 transition-all cursor-pointer"
+                    title={`Bloquear a @${currentVideo.userName}`}
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
               <span className="text-[11px] font-semibold text-slate-300 bg-white/10 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-white/5">
                 <Eye className="w-3 h-3 text-slate-400" />

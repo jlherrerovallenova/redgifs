@@ -28,7 +28,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Film
+  Film,
+  Ban
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem } from '../types';
 import {
@@ -52,6 +53,7 @@ interface ExploreSearchProps {
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
   onToggleFavorite?: (video: SearchResultItem) => void;
   isFavorite?: (id: string) => boolean;
+  onBlockCreator?: (username: string) => void;
 }
 
 const POPULAR_TAGS = [
@@ -155,7 +157,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   onUpdateQuery,
   onOpenTheater,
   onToggleFavorite,
-  isFavorite
+  isFavorite,
+  onBlockCreator
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialTag || '');
   const [activeTag, setActiveTag] = useState<string>(initialTag || 'trending');
@@ -1128,23 +1131,41 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                   <div>
                     {/* Creador & Métricas */}
                     <div className="flex items-center justify-between text-xs mb-1.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onSelectCreator) {
-                            if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
-                            onSelectCreator(item.userName);
-                          } else {
-                            setSearchQuery(item.userName);
-                            executeSearch(item.userName, 1, false);
-                          }
-                        }}
-                        className="text-purple-400 hover:text-purple-300 font-bold truncate max-w-[130px] flex items-center gap-1 hover:underline cursor-pointer"
-                        title={`Ver perfil completo de @${item.userName}`}
-                      >
-                        @{item.userName}
-                      </button>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectCreator) {
+                              if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
+                              onSelectCreator(item.userName);
+                            } else {
+                              setSearchQuery(item.userName);
+                              executeSearch(item.userName, 1, false);
+                            }
+                          }}
+                          className="text-purple-400 hover:text-purple-300 font-bold truncate max-w-[120px] flex items-center gap-1 hover:underline cursor-pointer"
+                          title={`Ver perfil completo de @${item.userName}`}
+                        >
+                          @{item.userName}
+                        </button>
+                        {onBlockCreator && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`¿Bloquear permanentemente a @${item.userName}? No volverás a ver sus videos.`)) {
+                                onBlockCreator(item.userName);
+                                setSearchResults(prev => prev.filter(p => p.userName?.toLowerCase() !== item.userName.toLowerCase()));
+                              }
+                            }}
+                            className="p-0.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                            title={`Bloquear y no mostrar más a @${item.userName}`}
+                          >
+                            <Ban className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
                         <span className="flex items-center gap-0.5">
                           <Eye className="w-3 h-3 text-slate-500" />

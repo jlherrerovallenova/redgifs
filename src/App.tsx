@@ -15,8 +15,9 @@ import { TheaterFeedModal } from './components/TheaterFeedModal';
 import { SaveToListModal } from './components/SaveToListModal';
 import { TabletBottomDock } from './components/TabletBottomDock';
 import { UpdateNotificationBanner } from './components/UpdateNotificationBanner';
+import { BlockedCreatorsModal } from './components/BlockedCreatorsModal';
 import { useAppUpdate } from './hooks/useAppUpdate';
-import { searchVideosExtended } from './services/redgifs';
+import { searchVideosExtended, getBlockedCreators } from './services/redgifs';
 
 type TabType = 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
 
@@ -247,6 +248,63 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   }, []);
 
+  // Sistema de Creadores Bloqueados (Lista Negra Permanente)
+  const [blockedCreators, setBlockedCreators] = useState<string[]>(() => getBlockedCreators());
+  const [isBlockedModalOpen, setIsBlockedModalOpen] = useState(false);
+
+  const handleBlockCreator = useCallback((username: string) => {
+    const clean = username.trim().replace(/^@/, '');
+    if (!clean) return;
+    setBlockedCreators(prev => {
+      if (prev.some(c => c.toLowerCase() === clean.toLowerCase())) return prev;
+      const updated = [...prev, clean];
+      localStorage.setItem('rg_blocked_creators', JSON.stringify(updated));
+      return updated;
+    });
+    showToast(`🚫 Creador @${clean} bloqueado permanentemente`);
+
+    // Cerrar Lightbox si el video activo es del creador bloqueado
+    setLightbox(prev => {
+      if (prev.open && prev.userName?.toLowerCase() === clean.toLowerCase()) {
+        return { open: false, url: '', title: '', tags: [], userName: '' };
+      }
+      return prev;
+    });
+
+    // Limpiar videos en el feed Reels si pertenecen a este creador
+    setTheaterState(prev => {
+      if (!prev.open) return prev;
+      const filtered = prev.videos.filter(v => v.userName?.toLowerCase() !== clean.toLowerCase());
+      if (filtered.length === 0) {
+        return { ...prev, open: false, videos: [] };
+      }
+      const newIdx = Math.min(prev.startIndex, filtered.length - 1);
+      return { ...prev, videos: filtered, startIndex: Math.max(0, newIdx) };
+    });
+  }, [showToast]);
+
+  const handleUnblockCreator = useCallback((username: string) => {
+    const clean = username.trim().replace(/^@/, '');
+    setBlockedCreators(prev => {
+      const updated = prev.filter(c => c.toLowerCase() !== clean.toLowerCase());
+      localStorage.setItem('rg_blocked_creators', JSON.stringify(updated));
+      return updated;
+    });
+    showToast(`✅ Creador @${clean} desbloqueado`);
+  }, [showToast]);
+
+  const handleClearAllBlocked = useCallback(() => {
+    setBlockedCreators([]);
+    localStorage.removeItem('rg_blocked_creators');
+    showToast('Se han desbloqueado todos los creadores');
+  }, [showToast]);
+
+  const isBlocked = useCallback((username?: string): boolean => {
+    if (!username) return false;
+    const clean = username.toLowerCase().trim().replace(/^@/, '');
+    return blockedCreators.some(c => c.toLowerCase().trim().replace(/^@/, '') === clean);
+  }, [blockedCreators]);
+
   // Navegar a una pestaña o vista guardando el estado en el historial de navegación
   const navigateTo = useCallback(
     (
@@ -436,6 +494,8 @@ export default function App() {
         setActiveTab={handleTabChange}
         historyCount={history.length}
         favoritesCount={totalFavoritesCount}
+        blockedCount={blockedCreators.length}
+        onOpenBlockedModal={() => setIsBlockedModalOpen(true)}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenTheater={() => handleOpenTheater()}
         canGoBack={canGoBack}
@@ -478,6 +538,7 @@ export default function App() {
             isFavorite={isFavorite}
             showToast={showToast}
             onSuccessDownload={handleSuccessDownload}
+            onBlockCreator={handleBlockCreator}
           />
         )}
 
@@ -514,6 +575,7 @@ export default function App() {
             onOpenTheater={handleOpenTheater}
             onToggleFavorite={handleToggleFavorite}
             isFavorite={isFavorite}
+            onBlockCreator={handleBlockCreator}
             onSendToBatch={(urls) => {
               navigateTo('batch', { batchUrls: urls.join('\n') });
               showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
@@ -535,6 +597,9 @@ export default function App() {
             canGoBack={canGoBack}
             onGoBack={handleGoBack}
             previousLabel={previousTabLabel}
+            onBlockCreator={handleBlockCreator}
+            onUnblockCreator={handleUnblockCreator}
+            isCreatorBlocked={isBlocked}
             onSendToBatch={(urls) => {
               navigateTo('batch', { batchUrls: urls.join('\n') });
               showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
@@ -612,6 +677,7 @@ export default function App() {
         onSelectCreator={handleOpenCreator}
         showToast={showToast}
         onSuccessDownload={handleSuccessDownload}
+        onBlockCreator={handleBlockCreator}
         onSwitchVideo={(item) => {
           setLightbox({
             open: true,
@@ -645,6 +711,17 @@ export default function App() {
         onSuccessDownload={handleSuccessDownload}
         onToggleFavorite={handleToggleFavorite}
         isFavorite={isFavorite}
+        onBlockCreator={handleBlockCreator}
+        showToast={showToast}
+      />
+
+      {/* Modal Administrar Creadores Bloqueados */}
+      <BlockedCreatorsModal
+        isOpen={isBlockedModalOpen}
+        onClose={() => setIsBlockedModalOpen(false)}
+        blockedCreators={blockedCreators}
+        onUnblockCreator={handleUnblockCreator}
+        onClearAllBlocked={handleClearAllBlocked}
         showToast={showToast}
       />
 

@@ -28,7 +28,9 @@ import {
   TrendingUp,
   Globe,
   Film,
-  ArrowLeft
+  ArrowLeft,
+  Ban,
+  ShieldAlert
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
@@ -53,6 +55,9 @@ interface CreatorExplorerProps {
   onGoBack?: () => void;
   canGoBack?: boolean;
   previousLabel?: string;
+  onBlockCreator?: (username: string) => void;
+  onUnblockCreator?: (username: string) => void;
+  isCreatorBlocked?: (username: string) => boolean;
 }
 
 const FEATURED_CREATORS = [
@@ -93,7 +98,10 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   isFavorite,
   onGoBack,
   canGoBack,
-  previousLabel
+  previousLabel,
+  onBlockCreator,
+  onUnblockCreator,
+  isCreatorBlocked
 }) => {
   const [usernameInput, setUsernameInput] = useState(initialUsername);
   const [activeUsername, setActiveUsername] = useState(initialUsername);
@@ -830,8 +838,37 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               </div>
             </div>
 
-            {/* Enlaces Externos / Redes Sociales / Favorito / SimpCity */}
+            {/* Enlaces Externos / Redes Sociales / Favorito / Bloquear / SimpCity */}
             <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto pt-2 lg:pt-0">
+              {/* Botón de Bloquear / Desbloquear Creador */}
+              {isCreatorBlocked && isCreatorBlocked(profile.username) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onUnblockCreator) onUnblockCreator(profile.username);
+                  }}
+                  className="px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 bg-red-600/30 hover:bg-emerald-600/30 text-red-200 hover:text-emerald-200 border border-red-500/50 hover:border-emerald-500/50"
+                  title="Creador bloqueado. Pulsa para desbloquearlo."
+                >
+                  <Ban className="w-4 h-4 text-red-400" />
+                  <span>Bloqueado (Desbloquear)</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`¿Estás seguro de que deseas bloquear a @${profile.username}? No se volverán a mostrar sus videos ni perfil.`)) {
+                      if (onBlockCreator) onBlockCreator(profile.username);
+                    }
+                  }}
+                  className="px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0 bg-white/5 hover:bg-red-600/20 text-slate-300 hover:text-red-300 border border-white/10 hover:border-red-500/40"
+                  title="Bloquear permanentemente a este creador (no volver a ver sus videos)"
+                >
+                  <Ban className="w-4 h-4 text-slate-400 hover:text-red-400" />
+                  <span>Bloquear Creador</span>
+                </button>
+              )}
+
               {/* Botón de Favorito del Creador */}
               <button
                 type="button"
@@ -984,6 +1021,30 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Alerta de Creador Bloqueado */}
+      {profile && isCreatorBlocked && isCreatorBlocked(profile.username) && (
+        <div className="bg-red-950/40 border border-red-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-red-600/30 text-red-400 border border-red-500/40 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-red-300">Este creador está en tu lista de bloqueados</h4>
+              <p className="text-xs text-slate-400">Sus videos están completamente ocultos de las búsquedas, feeds y recomendaciones.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onUnblockCreator) onUnblockCreator(profile.username);
+            }}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-transform active:scale-95 cursor-pointer shrink-0"
+          >
+            Desbloquear Creador
+          </button>
         </div>
       )}
 

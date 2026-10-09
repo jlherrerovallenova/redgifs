@@ -1,11 +1,13 @@
 import React from 'react';
-import { ArrowLeft, Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart } from 'lucide-react';
+import { ArrowLeft, Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart, Ban } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
   setActiveTab: (tab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history') => void;
   historyCount: number;
   favoritesCount?: number;
+  blockedCount?: number;
+  onOpenBlockedModal?: () => void;
   onOpenInstallModal?: () => void;
   onOpenTheater?: () => void;
   canGoBack?: boolean;
@@ -18,6 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   historyCount,
   favoritesCount = 0,
+  blockedCount = 0,
+  onOpenBlockedModal,
   onOpenInstallModal,
   onOpenTheater,
   canGoBack = false,
@@ -203,6 +207,28 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </button>
+
+          {/* Botón Creadores Bloqueados */}
+          {onOpenBlockedModal && (
+            <button
+              type="button"
+              onClick={onOpenBlockedModal}
+              aria-label="Creadores Bloqueados"
+              className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer border relative ${
+                blockedCount && blockedCount > 0
+                  ? 'bg-red-950/40 text-red-300 border-red-500/40 hover:bg-red-900/50'
+                  : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/10'
+              }`}
+              title="Administrar creadores bloqueados (Lista negra)"
+            >
+              <Ban className="w-4 h-4 text-red-400" />
+              {blockedCount && blockedCount > 0 ? (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black px-1 rounded-full">
+                  {blockedCount}
+                </span>
+              ) : null}
+            </button>
+          )}
 
           {onOpenInstallModal && (
             <button
