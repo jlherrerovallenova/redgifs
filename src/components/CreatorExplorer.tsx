@@ -153,16 +153,26 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearchingMatching, setIsSearchingMatching] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const hasSubmittedSearchRef = useRef(false);
 
-  // Cerrar sugerencias al hacer clic fuera
+  // Cerrar sugerencias al hacer clic fuera o pulsar Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Autocompletado en vivo mientras se escribe el nombre o parte del nombre
@@ -174,22 +184,39 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
       return;
     }
 
+    // Si el usuario ya coincide con el creador activo o ya se ha buscado, no desplegar sugerencias
+    if (activeUsername && clean.toLowerCase() === activeUsername.toLowerCase()) {
+      setLiveSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (hasSubmittedSearchRef.current) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    let active = true;
     const timer = setTimeout(async () => {
       try {
         const res = await searchCreatorsPaginated(clean, 6, 1);
-        if (res.items.length > 0) {
+        if (active && !hasSubmittedSearchRef.current && res.items.length > 0) {
           setLiveSuggestions(res.items);
           setShowSuggestions(true);
-        } else {
+        } else if (active) {
           setLiveSuggestions([]);
+          setShowSuggestions(false);
         }
       } catch {
-        setLiveSuggestions([]);
+        if (active) setLiveSuggestions([]);
       }
-    }, 200);
+    }, 250);
 
-    return () => clearTimeout(timer);
-  }, [usernameInput]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [usernameInput, activeUsername]);
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -304,7 +331,9 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   ) => {
     const clean = targetUser.trim().replace(/^@/, '');
     if (!clean) return;
+    hasSubmittedSearchRef.current = true;
     setShowSuggestions(false);
+    setLiveSuggestions([]);
 
     if (page === 1) {
       setIsLoading(true);
@@ -360,7 +389,10 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
     e.preventDefault();
     const clean = usernameInput.trim().replace(/^@/, '');
     if (!clean) return;
+    hasSubmittedSearchRef.current = true;
     setShowSuggestions(false);
+    setLiveSuggestions([]);
+    (document.activeElement as HTMLElement)?.blur?.();
     loadCreator(clean, order, 1, false);
   };
 
@@ -586,9 +618,12 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               type="text"
               value={usernameInput}
               aria-label="Nombre del creador a explorar"
-              onChange={(e) => setUsernameInput(e.target.value)}
+              onChange={(e) => {
+                hasSubmittedSearchRef.current = false;
+                setUsernameInput(e.target.value);
+              }}
               onFocus={() => {
-                if (liveSuggestions.length > 0) setShowSuggestions(true);
+                if (!hasSubmittedSearchRef.current && liveSuggestions.length > 0) setShowSuggestions(true);
               }}
               placeholder="Introduce nombre completo o parte del nombre (ej. nami, brazz, erst, candy)..."
               className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
@@ -597,6 +632,7 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  hasSubmittedSearchRef.current = false;
                   setUsernameInput('');
                   setLiveSuggestions([]);
                   setShowSuggestions(false);
@@ -628,7 +664,22 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
             <div className="absolute top-full left-0 right-0 mt-2 bg-[#10121a]/98 backdrop-blur-2xl border border-purple-500/40 rounded-2xl shadow-2xl p-2 z-50 animate-fadeIn text-left max-h-80 overflow-y-auto">
               <div className="text-[11px] font-bold uppercase tracking-wider text-purple-400 px-3 py-1 flex items-center justify-between border-b border-white/5 pb-1.5 mb-1">
                 <span>Coincidencias para "{usernameInput}":</span>
-                <span className="text-[10px] text-slate-400 font-mono">{liveSuggestions.length} encontrados</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">{liveSuggestions.length} encontrados</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSuggestions(false);
+                      setLiveSuggestions([]);
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Cerrar sugerencias"
+                    aria-label="Cerrar sugerencias"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="space-y-1">
                 {liveSuggestions.map((sug) => (
@@ -636,9 +687,12 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
                     key={sug.username}
                     type="button"
                     onClick={() => {
+                      hasSubmittedSearchRef.current = true;
                       setUsernameInput(sug.username);
                       setShowSuggestions(false);
+                      setLiveSuggestions([]);
                       setMatchingCreators([]);
+                      (document.activeElement as HTMLElement)?.blur?.();
                       loadCreator(sug.username, order, 1, false);
                     }}
                     className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group text-left"

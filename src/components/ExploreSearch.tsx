@@ -206,6 +206,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   // Referencias para scroll y menú flotante
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const hasSubmittedSearchRef = useRef(false);
 
   // Sugerencias de autocompletado en vivo
   const [suggestions, setSuggestions] = useState<TagSuggestion[]>([]);
@@ -316,29 +317,62 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     const clean = searchQuery.trim();
     if (!clean || clean.length < 2) {
       setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
+    // Si ya coincide con el término activo o la búsqueda ya fue enviada, no desplegar sugerencias
+    if (activeSearchTermRef.current && clean.toLowerCase() === activeSearchTermRef.current.toLowerCase()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    if (hasSubmittedSearchRef.current) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    let active = true;
     const timer = setTimeout(async () => {
-      const results = await getSearchSuggestions(clean);
-      setSuggestions(results);
-      if (results.length > 0) {
-        setShowSuggestions(true);
+      try {
+        const results = await getSearchSuggestions(clean);
+        if (active && !hasSubmittedSearchRef.current && results.length > 0) {
+          setSuggestions(results);
+          setShowSuggestions(true);
+        } else if (active) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch {
+        if (active) setSuggestions([]);
       }
     }, 180);
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [searchQuery]);
 
-  // Cerrar sugerencias al hacer clic fuera
+  // Cerrar sugerencias al hacer clic fuera o pulsar Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const saveRecentSearch = (term: string) => {
@@ -360,7 +394,9 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     const term = query.trim() || 'trending';
     setActiveSearchTerm(term);
     activeSearchTermRef.current = term;
+    hasSubmittedSearchRef.current = true;
     setShowSuggestions(false);
+    setSuggestions([]);
     setIsSearching(true);
 
     try {
@@ -413,6 +449,11 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     const term = searchQuery.trim();
     if (!term) return;
 
+    hasSubmittedSearchRef.current = true;
+    setShowSuggestions(false);
+    setSuggestions([]);
+    (document.activeElement as HTMLElement)?.blur?.();
+
     if (term.startsWith('@') && onSelectCreator) {
       const creatorName = term.slice(1).trim();
       if (onUpdateQuery) onUpdateQuery(term);
@@ -426,6 +467,10 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
   };
 
   const handleTagClick = (tag: { label: string; query: string }) => {
+    hasSubmittedSearchRef.current = true;
+    setShowSuggestions(false);
+    setSuggestions([]);
+    (document.activeElement as HTMLElement)?.blur?.();
     setActiveTag(tag.query);
     setSearchQuery(tag.query);
     if (onUpdateQuery) onUpdateQuery(tag.query);
@@ -434,10 +479,14 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   // Insertar sugerencia en la barra de búsqueda o navegar al creador
   const handleSelectSuggestion = (s: TagSuggestion) => {
+    hasSubmittedSearchRef.current = true;
+    setShowSuggestions(false);
+    setSuggestions([]);
+    (document.activeElement as HTMLElement)?.blur?.();
+
     if (s.type === 'creator' && onSelectCreator) {
       if (onUpdateQuery) onUpdateQuery(searchQuery || s.text);
       onSelectCreator(s.text);
-      setShowSuggestions(false);
       return;
     }
 
@@ -454,7 +503,6 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       if (onUpdateQuery) onUpdateQuery(updated);
       executeSearch(updated, 1, false);
     }
-    setShowSuggestions(false);
   };
 
   // Operadores booleanos rápidos
@@ -607,9 +655,12 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               type="text"
               value={searchQuery}
               aria-label="Buscar por palabra clave, etiqueta o creador"
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                hasSubmittedSearchRef.current = false;
+                setSearchQuery(e.target.value);
+              }}
               onFocus={() => {
-                if (suggestions.length > 0) setShowSuggestions(true);
+                if (!hasSubmittedSearchRef.current && suggestions.length > 0) setShowSuggestions(true);
               }}
               placeholder="Buscar por palabra clave, etiqueta o creador (ej. baile, fitness, playa)..."
               className="w-full bg-transparent px-3 py-3.5 text-sm sm:text-base outline-none text-white placeholder-slate-500 font-medium"
@@ -618,8 +669,10 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  hasSubmittedSearchRef.current = false;
                   setSearchQuery('');
                   setSuggestions([]);
+                  setShowSuggestions(false);
                   executeSearch('trending', 1, false);
                 }}
                 aria-label="Limpiar término de búsqueda"
@@ -649,7 +702,22 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             <div className="absolute top-full left-0 right-0 mt-2 bg-[#12141c]/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl shadow-black/80 z-50 overflow-hidden text-left animate-fadeIn">
               <div className="px-3 py-2 border-b border-white/10 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                 <span>Sugerencias inteligentes</span>
-                <span className="text-[10px] text-slate-500">Pulsa para autocompletar</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-500">Pulsa para autocompletar</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSuggestions(false);
+                      setSuggestions([]);
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Cerrar sugerencias"
+                    aria-label="Cerrar sugerencias"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div className="max-h-60 overflow-y-auto divide-y divide-white/5">
                 {suggestions.map((s) => (
