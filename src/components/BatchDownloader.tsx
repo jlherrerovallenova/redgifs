@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Film, Sparkles, CheckCircle2, FolderDown } from 'lucide-react';
 import { RedGifItem } from '../types';
 import { getVideoInfo, fetchVideoBlob, downloadVideoFile, saveVideoWithPicker } from '../services/redgifs';
-import { mergeVideoBlobs, MergeProgress } from '../services/videoMerger';
+import type { MergeProgress } from '../services/videoMerger';
 import { BatchItemList, BatchItemStatus } from './BatchItemList';
 
 interface BatchDownloaderProps {
@@ -142,6 +142,7 @@ export const BatchDownloader: React.FC<BatchDownloaderProps> = ({ onSuccessDownl
       setMergeStatusText('Uniendo videos en un único archivo continuo...');
 
       try {
+        const { mergeVideoBlobs } = await import('../services/videoMerger');
         const { blob: mergedBlob, extension } = await mergeVideoBlobs(
           downloadedBlobs,
           (prog: MergeProgress) => {

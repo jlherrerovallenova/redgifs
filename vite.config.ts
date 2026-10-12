@@ -70,6 +70,26 @@ export default defineConfig({
   define: {
     __APP_BUILD_TIME__: JSON.stringify(currentBuildTime)
   },
+  build: {
+    target: 'es2020',
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('services/videoMerger')) {
+            return 'video-engine';
+          }
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     host: '0.0.0.0',

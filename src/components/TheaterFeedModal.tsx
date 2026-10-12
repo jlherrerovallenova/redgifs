@@ -638,19 +638,15 @@ export const TheaterFeedModal: React.FC<TheaterFeedModalProps> = ({
       <div className="fixed top-1/4 left-1/4 w-96 h-96 bg-red-600/15 blur-[150px] rounded-full pointer-events-none" />
       <div className="fixed bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/15 blur-[150px] rounded-full pointer-events-none" />
 
-      {/* Preload adjacent videos */}
-      {nextVideo && (
-        <video
-          src={nextVideo.hd_url || nextVideo.sd_url}
-          preload="auto"
+      {/* Addy Osmani Network Optimization: Preload only next thumbnail to prevent mobile buffer exhaustion */}
+      {nextVideo?.thumbnail_url && (
+        <img
+          src={nextVideo.thumbnail_url}
+          alt=""
+          loading="eager"
+          decoding="async"
           className="hidden"
-        />
-      )}
-      {prevVideo && (
-        <video
-          src={prevVideo.hd_url || prevVideo.sd_url}
-          preload="auto"
-          className="hidden"
+          aria-hidden="true"
         />
       )}
 

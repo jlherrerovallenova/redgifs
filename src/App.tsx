@@ -1,23 +1,36 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { RedGifItem, HistoryItem, SearchResultItem, CustomList } from './types';
 import { Header } from './components/Header';
 import { DiscoverHub } from './components/DiscoverHub';
-import { SingleDownloader } from './components/SingleDownloader';
-import { BatchDownloader } from './components/BatchDownloader';
-import { ExploreSearch } from './components/ExploreSearch';
-import { CreatorExplorer } from './components/CreatorExplorer';
-import { FavoritesList } from './components/FavoritesList';
-import { HistoryList } from './components/HistoryList';
-import { LightboxModal } from './components/LightboxModal';
-import { InstallPwaModal } from './components/InstallPwaModal';
-import { TheaterFeedModal } from './components/TheaterFeedModal';
-import { SaveToListModal } from './components/SaveToListModal';
 import { TabletBottomDock } from './components/TabletBottomDock';
 import { UpdateNotificationBanner } from './components/UpdateNotificationBanner';
-import { BlockedCreatorsModal } from './components/BlockedCreatorsModal';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import { searchVideosExtended, getBlockedCreators } from './services/redgifs';
+
+// Code-Splitting por Rutas y Modales (Patrón PRPL de Addy Osmani)
+const SingleDownloader = lazy(() => import('./components/SingleDownloader').then(m => ({ default: m.SingleDownloader })));
+const BatchDownloader = lazy(() => import('./components/BatchDownloader').then(m => ({ default: m.BatchDownloader })));
+const ExploreSearch = lazy(() => import('./components/ExploreSearch').then(m => ({ default: m.ExploreSearch })));
+const CreatorExplorer = lazy(() => import('./components/CreatorExplorer').then(m => ({ default: m.CreatorExplorer })));
+const FavoritesList = lazy(() => import('./components/FavoritesList').then(m => ({ default: m.FavoritesList })));
+const HistoryList = lazy(() => import('./components/HistoryList').then(m => ({ default: m.HistoryList })));
+const LightboxModal = lazy(() => import('./components/LightboxModal').then(m => ({ default: m.LightboxModal })));
+const TheaterFeedModal = lazy(() => import('./components/TheaterFeedModal').then(m => ({ default: m.TheaterFeedModal })));
+const SaveToListModal = lazy(() => import('./components/SaveToListModal').then(m => ({ default: m.SaveToListModal })));
+const BlockedCreatorsModal = lazy(() => import('./components/BlockedCreatorsModal').then(m => ({ default: m.BlockedCreatorsModal })));
+const InstallPwaModal = lazy(() => import('./components/InstallPwaModal').then(m => ({ default: m.InstallPwaModal })));
+
+function TabLoadingFallback() {
+  return (
+    <div className="py-24 text-center space-y-4 animate-fadeIn">
+      <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto shadow-xl">
+        <Loader2 className="w-6 h-6 text-red-500 animate-spin" />
+      </div>
+      <p className="text-slate-400 text-xs font-semibold">Cargando módulo bajo demanda...</p>
+    </div>
+  );
+}
 
 type TabType = 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
 
@@ -475,9 +488,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#090a0f] text-slate-100 relative overflow-x-hidden">
-      {/* Luces de ambiente */}
-      <div className="fixed top-[-100px] left-[20%] w-[500px] h-[500px] bg-red-600/10 blur-[130px] rounded-full pointer-events-none" />
-      <div className="fixed top-[300px] right-[15%] w-[450px] h-[450px] bg-purple-600/10 blur-[130px] rounded-full pointer-events-none" />
+      {/* Luces de ambiente (Optimizadas con gradientes radiales estáticos para cero coste de composición GPU) */}
+      <div className="fixed top-[-100px] left-[20%] w-[500px] h-[500px] ambient-glow-red rounded-full pointer-events-none" />
+      <div className="fixed top-[300px] right-[15%] w-[450px] h-[450px] ambient-glow-purple rounded-full pointer-events-none" />
 
       {/* Banner flotante de aviso de actualización disponible */}
       <UpdateNotificationBanner
@@ -509,7 +522,7 @@ export default function App() {
           <button
             type="button"
             onClick={handleGoBack}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-all shadow-md hover:border-pink-500/40 active:scale-95 cursor-pointer group"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-bold transition-transform shadow-md hover:border-pink-500/40 active:scale-95 cursor-pointer group"
             title={`Volver a ${previousTabLabel || 'atrás'} (Alt + ←)`}
           >
             <ArrowLeft className="w-3.5 h-3.5 text-pink-400 group-hover:-translate-x-1 transition-transform" />
@@ -526,119 +539,121 @@ export default function App() {
         </div>
       )}
 
-      {/* Contenido principal optimizado para iPad y Desktop */}
+      {/* Contenido principal optimizado para iPad y Desktop con Suspense */}
       <main className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-32 sm:pb-36">
-        {activeTab === 'discover' && (
-          <DiscoverHub
-            onOpenLightbox={handleOpenLightbox}
-            onOpenTheater={handleOpenTheater}
-            onSelectCreator={handleOpenCreator}
-            onSelectTag={handleOpenTag}
-            onToggleFavorite={handleToggleFavorite}
-            isFavorite={isFavorite}
-            showToast={showToast}
-            onSuccessDownload={handleSuccessDownload}
-            onBlockCreator={handleBlockCreator}
-          />
-        )}
+        <Suspense fallback={<TabLoadingFallback />}>
+          {activeTab === 'discover' && (
+            <DiscoverHub
+              onOpenLightbox={handleOpenLightbox}
+              onOpenTheater={handleOpenTheater}
+              onSelectCreator={handleOpenCreator}
+              onSelectTag={handleOpenTag}
+              onToggleFavorite={handleToggleFavorite}
+              isFavorite={isFavorite}
+              showToast={showToast}
+              onSuccessDownload={handleSuccessDownload}
+              onBlockCreator={handleBlockCreator}
+            />
+          )}
 
-        {activeTab === 'single' && (
-          <SingleDownloader
-            onSuccessDownload={handleSuccessDownload}
-            showToast={showToast}
-            onSelectTag={handleOpenTag}
-            onOpenTheater={handleOpenTheater}
-            onToggleFavorite={handleToggleFavorite}
-            isFavorite={isFavorite}
-          />
-        )}
+          {activeTab === 'single' && (
+            <SingleDownloader
+              onSuccessDownload={handleSuccessDownload}
+              showToast={showToast}
+              onSelectTag={handleOpenTag}
+              onOpenTheater={handleOpenTheater}
+              onToggleFavorite={handleToggleFavorite}
+              isFavorite={isFavorite}
+            />
+          )}
 
-        {activeTab === 'batch' && (
-          <BatchDownloader
-            onSuccessDownload={handleSuccessDownload}
-            showToast={showToast}
-            initialUrls={prefilledBatchUrls}
-          />
-        )}
+          {activeTab === 'batch' && (
+            <BatchDownloader
+              onSuccessDownload={handleSuccessDownload}
+              showToast={showToast}
+              initialUrls={prefilledBatchUrls}
+            />
+          )}
 
-        {activeTab === 'explore' && (
-          <ExploreSearch
-            onOpenLightbox={handleOpenLightbox}
-            onSuccessDownload={handleSuccessDownload}
-            showToast={showToast}
-            onSelectCreator={handleOpenCreator}
-            initialTag={selectedTag.tag}
-            tagTimestamp={selectedTag.timestamp}
-            onUpdateQuery={(q) => {
-              setSelectedTag(prev => ({ ...prev, tag: q }));
-            }}
-            onOpenTheater={handleOpenTheater}
-            onToggleFavorite={handleToggleFavorite}
-            isFavorite={isFavorite}
-            onBlockCreator={handleBlockCreator}
-            onSendToBatch={(urls) => {
-              navigateTo('batch', { batchUrls: urls.join('\n') });
-              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
-            }}
-          />
-        )}
+          {activeTab === 'explore' && (
+            <ExploreSearch
+              onOpenLightbox={handleOpenLightbox}
+              onSuccessDownload={handleSuccessDownload}
+              showToast={showToast}
+              onSelectCreator={handleOpenCreator}
+              initialTag={selectedTag.tag}
+              tagTimestamp={selectedTag.timestamp}
+              onUpdateQuery={(q) => {
+                setSelectedTag(prev => ({ ...prev, tag: q }));
+              }}
+              onOpenTheater={handleOpenTheater}
+              onToggleFavorite={handleToggleFavorite}
+              isFavorite={isFavorite}
+              onBlockCreator={handleBlockCreator}
+              onSendToBatch={(urls) => {
+                navigateTo('batch', { batchUrls: urls.join('\n') });
+                showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+              }}
+            />
+          )}
 
-        {activeTab === 'creators' && (
-          <CreatorExplorer
-            onOpenLightbox={handleOpenLightbox}
-            onSuccessDownload={handleSuccessDownload}
-            showToast={showToast}
-            initialUsername={selectedCreator.username}
-            creatorTimestamp={selectedCreator.timestamp}
-            onSelectTag={handleOpenTag}
-            onOpenTheater={handleOpenTheater}
-            onToggleFavorite={handleToggleFavorite}
-            isFavorite={isFavorite}
-            canGoBack={canGoBack}
-            onGoBack={handleGoBack}
-            previousLabel={previousTabLabel}
-            onBlockCreator={handleBlockCreator}
-            onUnblockCreator={handleUnblockCreator}
-            isCreatorBlocked={isBlocked}
-            onSendToBatch={(urls) => {
-              navigateTo('batch', { batchUrls: urls.join('\n') });
-              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
-            }}
-          />
-        )}
+          {activeTab === 'creators' && (
+            <CreatorExplorer
+              onOpenLightbox={handleOpenLightbox}
+              onSuccessDownload={handleSuccessDownload}
+              showToast={showToast}
+              initialUsername={selectedCreator.username}
+              creatorTimestamp={selectedCreator.timestamp}
+              onSelectTag={handleOpenTag}
+              onOpenTheater={handleOpenTheater}
+              onToggleFavorite={handleToggleFavorite}
+              isFavorite={isFavorite}
+              canGoBack={canGoBack}
+              onGoBack={handleGoBack}
+              previousLabel={previousTabLabel}
+              onBlockCreator={handleBlockCreator}
+              onUnblockCreator={handleUnblockCreator}
+              isCreatorBlocked={isBlocked}
+              onSendToBatch={(urls) => {
+                navigateTo('batch', { batchUrls: urls.join('\n') });
+                showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+              }}
+            />
+          )}
 
-        {activeTab === 'favorites' && (
-          <FavoritesList
-            lists={lists}
-            activeListId={activeListId}
-            onSelectList={setActiveListId}
-            onCreateList={handleCreateList}
-            onDeleteList={handleDeleteList}
-            onRenameList={handleRenameList}
-            onRemoveVideoFromList={handleRemoveVideoFromList}
-            onOpenSaveToListModal={handleToggleFavorite}
-            onOpenLightbox={handleOpenLightbox}
-            onOpenTheater={handleOpenTheater}
-            onSelectCreator={handleOpenCreator}
-            onSelectTag={handleOpenTag}
-            onSendToBatch={(urls) => {
-              navigateTo('batch', { batchUrls: urls.join('\n') });
-              showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
-            }}
-            onSuccessDownload={handleSuccessDownload}
-            onImportLists={handleImportLists}
-            onClearActiveList={handleClearActiveList}
-            showToast={showToast}
-          />
-        )}
+          {activeTab === 'favorites' && (
+            <FavoritesList
+              lists={lists}
+              activeListId={activeListId}
+              onSelectList={setActiveListId}
+              onCreateList={handleCreateList}
+              onDeleteList={handleDeleteList}
+              onRenameList={handleRenameList}
+              onRemoveVideoFromList={handleRemoveVideoFromList}
+              onOpenSaveToListModal={handleToggleFavorite}
+              onOpenLightbox={handleOpenLightbox}
+              onOpenTheater={handleOpenTheater}
+              onSelectCreator={handleOpenCreator}
+              onSelectTag={handleOpenTag}
+              onSendToBatch={(urls) => {
+                navigateTo('batch', { batchUrls: urls.join('\n') });
+                showToast(`${urls.length} videos transferidos a Descarga por Lotes`);
+              }}
+              onSuccessDownload={handleSuccessDownload}
+              onImportLists={handleImportLists}
+              onClearActiveList={handleClearActiveList}
+              showToast={showToast}
+            />
+          )}
 
-        {activeTab === 'history' && (
-          <HistoryList
-            history={history}
-            onClearHistory={handleClearHistory}
-            onOpenLightbox={(url, title) => handleOpenLightbox(url, title, [])}
-          />
-        )}
+          {activeTab === 'history' && (
+            <HistoryList
+              history={history}
+              onClearHistory={handleClearHistory}
+              onOpenLightbox={(url, title) => handleOpenLightbox(url, title, [])}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* Barra de Navegación Flotante Táctil para iPad y Dispositivos Móviles */}
@@ -650,87 +665,107 @@ export default function App() {
       />
 
       {/* Modal Guardar en Lista Personalizada */}
-      <SaveToListModal
-        isOpen={isSaveModalOpen}
-        video={saveModalVideo}
-        lists={lists}
-        onClose={() => {
-          setIsSaveModalOpen(false);
-          setSaveModalVideo(null);
-        }}
-        onToggleVideoInList={handleToggleVideoInList}
-        onCreateList={handleCreateList}
-        showToast={showToast}
-      />
+      {isSaveModalOpen && (
+        <Suspense fallback={null}>
+          <SaveToListModal
+            isOpen={isSaveModalOpen}
+            video={saveModalVideo}
+            lists={lists}
+            onClose={() => {
+              setIsSaveModalOpen(false);
+              setSaveModalVideo(null);
+            }}
+            onToggleVideoInList={handleToggleVideoInList}
+            onCreateList={handleCreateList}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Modal Lightbox */}
-      <LightboxModal
-        open={lightbox.open}
-        url={lightbox.url}
-        title={lightbox.title}
-        tags={lightbox.tags}
-        userName={lightbox.userName}
-        originalItem={lightbox.originalItem}
-        onToggleFavorite={handleToggleFavorite}
-        isFavorite={isFavorite}
-        onSelectTag={handleOpenTag}
-        onSelectCreator={handleOpenCreator}
-        showToast={showToast}
-        onSuccessDownload={handleSuccessDownload}
-        onBlockCreator={handleBlockCreator}
-        onSwitchVideo={(item) => {
-          setLightbox({
-            open: true,
-            url: item.hd_url || item.sd_url,
-            title: item.title,
-            tags: item.tags,
-            userName: item.userName,
-            originalItem: item
-          });
-        }}
-        onOpenTheater={
-          lightbox.originalItem
-            ? () => {
-                setLightbox({ open: false, url: '', title: '', tags: [], userName: '' });
-                handleOpenTheater([lightbox.originalItem!], 0);
-              }
-            : undefined
-        }
-        onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
-      />
+      {lightbox.open && (
+        <Suspense fallback={null}>
+          <LightboxModal
+            open={lightbox.open}
+            url={lightbox.url}
+            title={lightbox.title}
+            tags={lightbox.tags}
+            userName={lightbox.userName}
+            originalItem={lightbox.originalItem}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
+            onSelectTag={handleOpenTag}
+            onSelectCreator={handleOpenCreator}
+            showToast={showToast}
+            onSuccessDownload={handleSuccessDownload}
+            onBlockCreator={handleBlockCreator}
+            onSwitchVideo={(item) => {
+              setLightbox({
+                open: true,
+                url: item.hd_url || item.sd_url,
+                title: item.title,
+                tags: item.tags,
+                userName: item.userName,
+                originalItem: item
+              });
+            }}
+            onOpenTheater={
+              lightbox.originalItem
+                ? () => {
+                    setLightbox({ open: false, url: '', title: '', tags: [], userName: '' });
+                    handleOpenTheater([lightbox.originalItem!], 0);
+                  }
+                : undefined
+            }
+            onClose={() => setLightbox({ open: false, url: '', title: '', tags: [], userName: '' })}
+          />
+        </Suspense>
+      )}
 
       {/* Modal Feed Continuo / Reels (Modo Teatro) */}
-      <TheaterFeedModal
-        open={theaterState.open}
-        videos={theaterState.videos}
-        initialIndex={theaterState.startIndex}
-        isLoadingInitial={theaterState.isLoading}
-        onClose={() => setTheaterState(prev => ({ ...prev, open: false, isLoading: false }))}
-        onSelectTag={handleOpenTag}
-        onSelectCreator={handleOpenCreator}
-        onSuccessDownload={handleSuccessDownload}
-        onToggleFavorite={handleToggleFavorite}
-        isFavorite={isFavorite}
-        onBlockCreator={handleBlockCreator}
-        showToast={showToast}
-      />
+      {theaterState.open && (
+        <Suspense fallback={null}>
+          <TheaterFeedModal
+            open={theaterState.open}
+            videos={theaterState.videos}
+            initialIndex={theaterState.startIndex}
+            isLoadingInitial={theaterState.isLoading}
+            onClose={() => setTheaterState(prev => ({ ...prev, open: false, isLoading: false }))}
+            onSelectTag={handleOpenTag}
+            onSelectCreator={handleOpenCreator}
+            onSuccessDownload={handleSuccessDownload}
+            onToggleFavorite={handleToggleFavorite}
+            isFavorite={isFavorite}
+            onBlockCreator={handleBlockCreator}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Modal Administrar Creadores Bloqueados */}
-      <BlockedCreatorsModal
-        isOpen={isBlockedModalOpen}
-        onClose={() => setIsBlockedModalOpen(false)}
-        blockedCreators={blockedCreators}
-        onUnblockCreator={handleUnblockCreator}
-        onClearAllBlocked={handleClearAllBlocked}
-        showToast={showToast}
-      />
+      {isBlockedModalOpen && (
+        <Suspense fallback={null}>
+          <BlockedCreatorsModal
+            isOpen={isBlockedModalOpen}
+            onClose={() => setIsBlockedModalOpen(false)}
+            blockedCreators={blockedCreators}
+            onUnblockCreator={handleUnblockCreator}
+            onClearAllBlocked={handleClearAllBlocked}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Modal Instalación PWA */}
-      <InstallPwaModal
-        open={isInstallModalOpen}
-        onClose={() => setIsInstallModalOpen(false)}
-        showToast={showToast}
-      />
+      {isInstallModalOpen && (
+        <Suspense fallback={null}>
+          <InstallPwaModal
+            open={isInstallModalOpen}
+            onClose={() => setIsInstallModalOpen(false)}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
 
       {/* Toast Notification */}
       {toast && (

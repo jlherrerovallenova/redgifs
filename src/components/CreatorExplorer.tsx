@@ -30,7 +30,8 @@ import {
   Film,
   ArrowLeft,
   Ban,
-  ShieldAlert
+  ShieldAlert,
+  Tag
 } from 'lucide-react';
 import { SearchResultItem, RedGifItem, UserProfile } from '../types';
 import {
@@ -40,6 +41,8 @@ import {
   getVideoInfo,
   downloadVideoFile
 } from '../services/redgifs';
+import { TagActionMenu } from './TagActionMenu';
+import { VideoCard } from './VideoCard';
 
 interface CreatorExplorerProps {
   onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string, originalItem?: SearchResultItem) => void;
@@ -137,6 +140,12 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
   const [hdOnlyFilter, setHdOnlyFilter] = useState(false);
   const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'ultralong'>('all');
   const [keywordFilter, setKeywordFilter] = useState('');
+
+  // Menú contextual flotante de etiquetas
+  const [activeTagMenu, setActiveTagMenu] = useState<{
+    tag: string;
+    position: { x: number; y: number };
+  } | null>(null);
 
   // Búsqueda parcial y sugerencias en tiempo real
   const [matchingCreators, setMatchingCreators] = useState<UserProfile[]>([]);
@@ -417,6 +426,42 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
 
     return list;
   }, [videos, keywordFilter, audioFilter, hdOnlyFilter, durationFilter, sortType]);
+
+  // Nube de etiquetas más frecuentes del creador (inspirado en Stash / Danbooru)
+  const topCreatorTags = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const v of videos) {
+      if (v.tags && Array.isArray(v.tags)) {
+        for (const t of v.tags) {
+          const clean = t.trim().toLowerCase();
+          if (clean && clean.length > 2) {
+            counts[clean] = (counts[clean] || 0) + 1;
+          }
+        }
+      }
+    }
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([tag, count]) => ({ tag, count }));
+  }, [videos]);
+
+  const handleOpenTagMenu = (tag: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cleanTag = tag.trim().replace(/^#/, '');
+    if (!cleanTag) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setActiveTagMenu({
+      tag: cleanTag,
+      position: { x: rect.left, y: rect.bottom + 6 }
+    });
+  };
+
+  const handleFilterByTag = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, '');
+    setKeywordFilter(clean);
+    showToast(`Filtrando videos de @${activeUsername} por #${clean}`);
+  };
 
   // Compilación rápida del perfil
   const handleQuickCompile = async (limit: number) => {
@@ -1028,6 +1073,50 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Nube de Etiquetas Más Frecuentes del Creador (Inspirado en Stash / Danbooru) */}
+          {topCreatorTags.length > 0 && (
+            <div className="pt-2 border-t border-white/5 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 font-bold flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Etiquetas frecuentes de @{profile.username}:</span>
+                </span>
+                {keywordFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setKeywordFilter('')}
+                    className="text-[11px] text-purple-400 hover:text-white font-semibold cursor-pointer"
+                  >
+                    Quitar filtro ({keywordFilter})
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {topCreatorTags.map(({ tag, count }) => {
+                  const isActive = keywordFilter.toLowerCase() === tag.toLowerCase();
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={(e) => handleOpenTagMenu(tag, e)}
+                      className={`text-xs px-2.5 py-1 rounded-xl border font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 ${
+                        isActive
+                          ? 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-600/30'
+                          : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10'
+                      }`}
+                      title={`Opciones para #${tag} (${count} clips)`}
+                    >
+                      <span>#{tag}</span>
+                      <span className="text-[10px] opacity-60 bg-black/30 px-1 py-0.2 rounded-full">
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1332,222 +1421,29 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
         </div>
       ) : (
         <div className={getGridColsClass(gridCols)}>
-          {filteredVideos.map((item) => {
+          {filteredVideos.map((item, idx) => {
             const isSelected = selectedIds.has(item.id);
-            const isHovered = hoveredId === item.id;
-
             return (
-              <div
+              <VideoCard
                 key={item.id}
-                onMouseEnter={() => setHoveredId(item.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                className={`bg-[#12141c] rounded-2xl overflow-hidden border transition-all duration-200 flex flex-col group relative ${
-                  isSelected
-                    ? 'border-purple-500 shadow-lg shadow-purple-500/20 ring-2 ring-purple-500/30'
-                    : 'border-white/10 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-500/10'
-                }`}
-              >
-                {/* Checkbox de Selección Rápida */}
-                {selectMode && (
-                  <button
-                    type="button"
-                    onClick={(e) => toggleSelect(item.id, e)}
-                    aria-label={isSelected ? 'Deseleccionar video' : 'Seleccionar video'}
-                    className="absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-xl bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="w-5 h-5 text-purple-400" />
-                    ) : (
-                      <Square className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
-                )}
-
-                {/* Previsualización del Video / Thumbnail */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (selectMode) {
-                      toggleSelect(item.id);
-                    } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (selectMode) {
-                        toggleSelect(item.id);
-                      } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
-                      }
-                    }
-                  }}
-                  className="relative aspect-[16/10] bg-black overflow-hidden cursor-pointer w-full text-left"
-                >
-                  <img
-                    src={item.thumbnail_url}
-                    alt={item.title}
-                    loading="lazy"
-                    className={`w-full h-full object-cover transition-opacity duration-300 ${
-                      isHovered && item.silent_url ? 'opacity-0' : 'opacity-100'
-                    }`}
-                  />
-
-                  {isHovered && item.silent_url && (
-                    <video
-                      src={item.silent_url}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="absolute inset-0 w-full h-full object-cover z-10"
-                    />
-                  )}
-
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200 z-10 pointer-events-none">
-                    <div className="w-12 h-12 rounded-full bg-purple-600/90 text-white flex items-center justify-center shadow-xl shadow-purple-600/50 transform group-hover:scale-110 transition-transform">
-                      <Play className="w-6 h-6 fill-white ml-0.5" />
-                    </div>
-                  </div>
-
-                  {/* Badges */}
-                  <div className="absolute top-2 right-2 flex items-center gap-1 z-10 pointer-events-none">
-                    {item.hasAudio ? (
-                      <span className="bg-black/80 backdrop-blur-md text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-emerald-500/30">
-                        <Volume2 className="w-3 h-3" /> Audio
-                      </span>
-                    ) : (
-                      <span className="bg-black/80 backdrop-blur-md text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-white/10">
-                        <VolumeX className="w-3 h-3" /> Mudo
-                      </span>
-                    )}
-                    <span className="bg-purple-600/90 text-white text-[10px] font-black px-1.5 py-0.5 rounded">
-                      HD
-                    </span>
-                  </div>
-
-                  <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10 pointer-events-none flex items-center gap-1">
-                    <Clock className="w-2.5 h-2.5 text-slate-400" />
-                    {item.duration}s
-                  </div>
-                </div>
-
-                {/* Metadatos y Botones */}
-                <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1.5 text-slate-400">
-                      <span className="flex items-center gap-1 text-[11px]">
-                        <Eye className="w-3 h-3 text-purple-400" />
-                        {item.views.toLocaleString()} vistas
-                      </span>
-                      {typeof item.likes === 'number' && item.likes > 0 && (
-                        <span className="flex items-center gap-0.5 text-pink-400 text-[11px]">
-                          <Heart className="w-3 h-3 fill-pink-500/20" />
-                          {item.likes}
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="text-xs font-bold text-slate-200 line-clamp-2 leading-snug" title={item.title}>
-                      {item.title}
-                    </h3>
-
-                    {/* Tags interactivos */}
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1.5">
-                        {item.tags.slice(0, 4).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onSelectTag) {
-                                onSelectTag(t);
-                                showToast(`Buscando videos relacionados con #${t}...`);
-                              }
-                            }}
-                            className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 hover:text-white px-2 py-0.5 rounded-md border border-purple-500/20 hover:border-purple-500/40 transition-all font-medium truncate max-w-[120px] cursor-pointer active:scale-95"
-                            title={`Ver videos relacionados con #${t}`}
-                          >
-                            #{t}
-                          </button>
-                        ))}
-                        {item.tags.length > 4 && (
-                          <span
-                            className="text-[10px] text-slate-500 px-1 py-0.5 self-center"
-                            title={item.tags.slice(4).map(t => `#${t}`).join(', ')}
-                          >
-                            +{item.tags.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 flex items-center gap-1.5 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={(e) => handleDownload(item, 'hd', e)}
-                      className="flex-1 min-w-0 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 px-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-purple-500/20 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">Descargar HD</span>
-                    </button>
-
-                    {onToggleFavorite && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleFavorite(item);
-                        }}
-                        title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
-                        className={`p-2 rounded-xl border transition-colors cursor-pointer shrink-0 ${
-                          isFavorite && isFavorite(item.id)
-                            ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
-                            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
-                        }`}
-                      >
-                        <Heart
-                          className={`w-3.5 h-3.5 ${
-                            isFavorite && isFavorite(item.id) ? 'fill-pink-500 text-pink-500' : ''
-                          }`}
-                        />
-                      </button>
-                    )}
-
-                    {onOpenTheater && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const idx = filteredVideos.findIndex(r => r.id === item.id);
-                          onOpenTheater(filteredVideos, idx >= 0 ? idx : 0);
-                        }}
-                        title="Ver en modo Feed / Reels continuo"
-                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer shrink-0"
-                      >
-                        <Film className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleCopyLink(item, e)}
-                      title="Copiar enlace"
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer shrink-0"
-                    >
-                      {copiedId === item.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
+                item={item}
+                priority={idx < 4}
+                isSelected={isSelected}
+                selectMode={selectMode}
+                isFavorite={isFavorite ? isFavorite(item.id) : false}
+                onToggleSelect={(id) => toggleSelect(id)}
+                onOpenLightbox={onOpenLightbox}
+                onToggleFavorite={onToggleFavorite}
+                onSelectCreator={() => {}}
+                onSelectTag={onSelectTag}
+                onTagMenuClick={(t, e) => handleOpenTagMenu(t, e)}
+                onOpenTheater={onOpenTheater ? () => {
+                  const targetIdx = filteredVideos.findIndex(r => r.id === item.id);
+                  onOpenTheater(filteredVideos, targetIdx >= 0 ? targetIdx : 0);
+                } : undefined}
+                onSuccessDownload={onSuccessDownload}
+                showToast={showToast}
+              />
             );
           })}
         </div>
@@ -1620,6 +1516,25 @@ export const CreatorExplorer: React.FC<CreatorExplorerProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Menú Contextual de Etiquetas */}
+      {activeTagMenu && (
+        <TagActionMenu
+          tag={activeTagMenu.tag}
+          position={activeTagMenu.position}
+          onClose={() => setActiveTagMenu(null)}
+          onSearchOnly={(t) => {
+            if (onSelectTag) {
+              onSelectTag(t);
+              showToast(`Buscando videos relacionados con #${t}...`);
+            } else {
+              handleFilterByTag(t);
+            }
+          }}
+          onAddToSearch={handleFilterByTag}
+          showToast={showToast}
+        />
       )}
     </div>
   );

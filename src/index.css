@@ -114,3 +114,25 @@ h1, h2, h3, .font-display {
 .animate-pulseGlow {
   animation: pulseGlow 2s ease-in-out infinite;
 }
+
+/* Addy Osmani Web Performance & GPU Compositing Utilities */
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 350px;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform, opacity;
+}
+
+/* Ambient Radial Glow (replaces expensive blur-130px filters with zero-compositing radial gradient) */
+.ambient-glow-red {
+  background: radial-gradient(circle at 50% 50%, rgba(220, 38, 38, 0.12) 0%, rgba(220, 38, 38, 0) 70%);
+}
+
+.ambient-glow-purple {
+  background: radial-gradient(circle at 50% 50%, rgba(147, 51, 234, 0.12) 0%, rgba(147, 51, 234, 0) 70%);
+}

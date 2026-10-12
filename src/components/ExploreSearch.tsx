@@ -40,6 +40,8 @@ import {
   parseBooleanQuery,
   TagSuggestion
 } from '../services/redgifs';
+import { TagActionMenu } from './TagActionMenu';
+import { VideoCard } from './VideoCard';
 
 interface ExploreSearchProps {
   onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string, originalItem?: SearchResultItem) => void;
@@ -211,11 +213,17 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
 
   // Filtros avanzados y orden
   const [audioFilter, setAudioFilter] = useState<'all' | 'audio' | 'mute'>('all');
-  const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long'>('all');
+  const [durationFilter, setDurationFilter] = useState<'all' | 'short' | 'medium' | 'long' | 'ultralong'>('all');
   const [qualityFilter, setQualityFilter] = useState<'all' | 'hd'>('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'views' | 'likes' | 'duration_desc' | 'duration_asc'>('relevance');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Menú interactivo contextual de etiquetas (inspirado en booru / Hydrus)
+  const [activeTagMenu, setActiveTagMenu] = useState<{
+    tag: string;
+    position: { x: number; y: number };
+  } | null>(null);
 
   // Selección múltiple para descarga por lotes
   const [selectMode, setSelectMode] = useState(false);
@@ -270,6 +278,37 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
+  };
+
+  const handleOpenTagMenu = (tag: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const cleanTag = tag.trim().replace(/^#/, '');
+    if (!cleanTag) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setActiveTagMenu({
+      tag: cleanTag,
+      position: { x: rect.left, y: rect.bottom + 6 }
+    });
+  };
+
+  const handleAddToSearch = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, '');
+    const current = searchQuery.trim();
+    const updated = current ? `${current} +${clean}` : clean;
+    setSearchQuery(updated);
+    if (onUpdateQuery) onUpdateQuery(updated);
+    showToast(`Etiqueta +${clean} añadida a la búsqueda`);
+    executeSearch(updated, 1, false);
+  };
+
+  const handleExcludeTag = (tag: string) => {
+    const clean = tag.trim().replace(/^#/, '');
+    const current = searchQuery.trim();
+    const updated = current ? `${current} -${clean}` : `trending -${clean}`;
+    setSearchQuery(updated);
+    if (onUpdateQuery) onUpdateQuery(updated);
+    showToast(`Etiqueta -${clean} excluida de la búsqueda`);
+    executeSearch(updated, 1, false);
   };
 
   // Autocompletado en vivo con debounce
@@ -469,6 +508,8 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
       list = list.filter(item => item.duration >= 15 && item.duration <= 30);
     } else if (durationFilter === 'long') {
       list = list.filter(item => item.duration > 30);
+    } else if (durationFilter === 'ultralong') {
+      list = list.filter(item => item.duration >= 60);
     }
 
     // Ordenación
@@ -931,7 +972,7 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             {/* Duración */}
             <div className="space-y-1">
               <span className="text-slate-400 font-semibold block">Duración:</span>
-              <div className="flex rounded-lg bg-black/40 p-1 border border-white/10">
+              <div className="flex rounded-lg bg-black/40 p-1 border border-white/10 gap-0.5">
                 <button
                   type="button"
                   onClick={() => setDurationFilter('all')}
@@ -948,10 +989,24 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setDurationFilter('medium')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'medium' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  15-30s
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDurationFilter('long')}
                   className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'long' ? 'bg-white/20 text-white font-bold' : 'text-slate-400'}`}
                 >
                   &gt;30s
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDurationFilter('ultralong')}
+                  className={`flex-1 py-1 rounded text-center transition-colors cursor-pointer ${durationFilter === 'ultralong' ? 'bg-pink-600/30 border border-pink-500/50 text-pink-300 font-bold' : 'text-slate-400'}`}
+                >
+                  &gt;60s
                 </button>
               </div>
             </div>
@@ -1000,256 +1055,45 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
         </div>
       ) : viewMode === 'grid' ? (
         <div className={getGridColsClass(gridCols)}>
-          {filteredResults.map((item) => {
+          {filteredResults.map((item, idx) => {
             const isSelected = selectedIds.has(item.id);
-            const isHovered = hoveredId === item.id;
-
             return (
-              <div
+              <VideoCard
                 key={item.id}
-                onMouseEnter={() => setHoveredId(item.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                className={`bg-[#12141c] rounded-2xl overflow-hidden border transition-all duration-200 flex flex-col group relative ${
-                  isSelected
-                    ? 'border-purple-500 shadow-lg shadow-purple-500/20 ring-2 ring-purple-500/30'
-                    : 'border-white/10 hover:border-red-500/50 hover:shadow-xl hover:shadow-red-500/10'
-                }`}
-              >
-                {/* Checkbox de Selección Rápida */}
-                {selectMode && (
-                  <button
-                    type="button"
-                    onClick={(e) => toggleSelect(item.id, e)}
-                    aria-label={isSelected ? 'Deseleccionar video' : 'Seleccionar video'}
-                    className="absolute top-2.5 left-2.5 z-20 w-8 h-8 rounded-xl bg-black/70 backdrop-blur-md border border-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
-                  >
-                    {isSelected ? (
-                      <CheckSquare className="w-5 h-5 text-purple-400" />
-                    ) : (
-                      <Square className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
-                )}
-
-                {/* Área de Previsualización */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    if (selectMode) {
-                      toggleSelect(item.id);
-                    } else {
-                      onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (selectMode) {
-                        toggleSelect(item.id);
-                      } else {
-                        onOpenLightbox(item.hd_url || item.sd_url, item.title, item.tags, item.userName, item);
-                      }
-                    }
-                  }}
-                  className="relative aspect-[16/10] bg-black overflow-hidden cursor-pointer w-full text-left"
-                >
-                  <img
-                    src={item.thumbnail_url}
-                    alt={item.title}
-                    loading="lazy"
-                    className={`w-full h-full object-cover transition-opacity duration-300 ${
-                      isHovered && item.silent_url ? 'opacity-0' : 'opacity-100'
-                    }`}
-                  />
-
-                  {isHovered && item.silent_url && (
-                    <video
-                      src={item.silent_url}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="absolute inset-0 w-full h-full object-cover z-10"
-                    />
-                  )}
-
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200 z-10 pointer-events-none">
-                    <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl shadow-red-600/50 transform group-hover:scale-110 transition-transform">
-                      <Play className="w-6 h-6 fill-white ml-0.5" />
-                    </div>
-                  </div>
-
-                  {/* Badges Flotantes */}
-                  <div className="absolute top-2 right-2 flex items-center gap-1 z-10 pointer-events-none">
-                    {item.hasAudio ? (
-                      <span className="bg-black/80 backdrop-blur-md text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-emerald-500/30">
-                        <Volume2 className="w-3 h-3" /> Audio
-                      </span>
-                    ) : (
-                      <span className="bg-black/80 backdrop-blur-md text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-white/10">
-                        <VolumeX className="w-3 h-3" /> Mudo
-                      </span>
-                    )}
-                    <span className="bg-red-600/90 text-white text-[10px] font-black px-1.5 py-0.5 rounded">
-                      HD
-                    </span>
-                  </div>
-
-                  <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10 pointer-events-none flex items-center gap-1">
-                    <Clock className="w-2.5 h-2.5 text-slate-400" />
-                    {item.duration}s
-                  </div>
-                </div>
-
-                {/* Contenido / Metadatos */}
-                <div className="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
-                  <div>
-                    {/* Creador & Métricas */}
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectCreator) {
-                              if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
-                              onSelectCreator(item.userName);
-                            } else {
-                              setSearchQuery(item.userName);
-                              executeSearch(item.userName, 1, false);
-                            }
-                          }}
-                          className="text-purple-400 hover:text-purple-300 font-bold truncate max-w-[120px] flex items-center gap-1 hover:underline cursor-pointer"
-                          title={`Ver perfil completo de @${item.userName}`}
-                        >
-                          @{item.userName}
-                        </button>
-                        {onBlockCreator && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`¿Bloquear permanentemente a @${item.userName}? No volverás a ver sus videos.`)) {
-                                onBlockCreator(item.userName);
-                                setSearchResults(prev => prev.filter(p => p.userName?.toLowerCase() !== item.userName.toLowerCase()));
-                              }
-                            }}
-                            className="p-0.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
-                            title={`Bloquear y no mostrar más a @${item.userName}`}
-                          >
-                            <Ban className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 shrink-0">
-                        <span className="flex items-center gap-0.5">
-                          <Eye className="w-3 h-3 text-slate-500" />
-                          {item.views.toLocaleString()}
-                        </span>
-                        {typeof item.likes === 'number' && item.likes > 0 && (
-                          <span className="flex items-center gap-0.5 text-pink-400/80">
-                            <Heart className="w-3 h-3 fill-pink-500/20" />
-                            {item.likes}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Título */}
-                    <h3 className="text-xs font-bold text-slate-200 line-clamp-1 leading-snug" title={item.title}>
-                      {item.title}
-                    </h3>
-
-                    {/* Tags interactivos */}
-                    {item.tags && item.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pt-1.5">
-                        {item.tags.slice(0, 4).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={(e) => handleSearchTag(t, e)}
-                            className="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-white px-2 py-0.5 rounded-md border border-red-500/20 hover:border-red-500/40 transition-all font-medium truncate max-w-[120px] cursor-pointer active:scale-95"
-                            title={`Ver videos relacionados con #${t}`}
-                          >
-                            #{t}
-                          </button>
-                        ))}
-                        {item.tags.length > 4 && (
-                          <span
-                            className="text-[10px] text-slate-500 px-1 py-0.5 self-center"
-                            title={item.tags.slice(4).map(t => `#${t}`).join(', ')}
-                          >
-                            +{item.tags.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Botones de Acción */}
-                  <div className="pt-2 flex items-center gap-1.5 border-t border-white/5">
-                    <button
-                      type="button"
-                      onClick={(e) => handleDownload(item, 'hd', e)}
-                      className="flex-1 min-w-0 bg-gradient-to-r from-red-600 to-pink-600 hover:opacity-90 text-white font-bold py-2 px-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 shadow-md shadow-red-500/20 cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">Descargar HD</span>
-                    </button>
-
-                    {onToggleFavorite && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleFavorite(item);
-                        }}
-                        title={isFavorite && isFavorite(item.id) ? 'Quitar de favoritos' : 'Guardar en mis favoritos'}
-                        className={`p-2 rounded-xl border transition-colors cursor-pointer shrink-0 ${
-                          isFavorite && isFavorite(item.id)
-                            ? 'bg-pink-600/25 border-pink-500/40 text-pink-400 hover:bg-pink-600/35'
-                            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-pink-400 border-white/10'
-                        }`}
-                      >
-                        <Heart
-                          className={`w-3.5 h-3.5 ${
-                            isFavorite && isFavorite(item.id) ? 'fill-pink-500 text-pink-500' : ''
-                          }`}
-                        />
-                      </button>
-                    )}
-
-                    {onOpenTheater && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const idx = filteredResults.findIndex(r => r.id === item.id);
-                          onOpenTheater(filteredResults, idx >= 0 ? idx : 0);
-                        }}
-                        title="Ver en modo Feed / Reels continuo"
-                        className="p-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/35 text-purple-300 border border-purple-500/30 hover:border-purple-400 transition-colors cursor-pointer shrink-0"
-                      >
-                        <Film className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleCopyLink(item, e)}
-                      title="Copiar enlace"
-                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/10 cursor-pointer shrink-0"
-                    >
-                      {copiedId === item.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
+                item={item}
+                priority={idx < 4}
+                isSelected={isSelected}
+                selectMode={selectMode}
+                isFavorite={isFavorite ? isFavorite(item.id) : false}
+                onToggleSelect={(id) => toggleSelect(id)}
+                onOpenLightbox={onOpenLightbox}
+                onToggleFavorite={onToggleFavorite}
+                onSelectCreator={(userName) => {
+                  if (onSelectCreator) {
+                    if (onUpdateQuery) onUpdateQuery(searchQuery || activeTag);
+                    onSelectCreator(userName);
+                  } else {
+                    setSearchQuery(userName);
+                    executeSearch(userName, 1, false);
+                  }
+                }}
+                onSelectTag={(t) => {
+                  setActiveTag(t);
+                  setSearchQuery(t);
+                  executeSearch(t, 1, false);
+                }}
+                onTagMenuClick={(t, e) => handleOpenTagMenu(t, e)}
+                onBlockCreator={onBlockCreator ? (userName) => {
+                  onBlockCreator(userName);
+                  setSearchResults(prev => prev.filter(p => p.userName?.toLowerCase() !== userName.toLowerCase()));
+                } : undefined}
+                onOpenTheater={onOpenTheater ? () => {
+                  const targetIdx = filteredResults.findIndex(r => r.id === item.id);
+                  onOpenTheater(filteredResults, targetIdx >= 0 ? targetIdx : 0);
+                } : undefined}
+                onSuccessDownload={onSuccessDownload}
+                showToast={showToast}
+              />
             );
           })}
         </div>
@@ -1342,9 +1186,9 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
                           <button
                             key={t}
                             type="button"
-                            onClick={(e) => handleSearchTag(t, e)}
+                            onClick={(e) => handleOpenTagMenu(t, e)}
                             className="text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-white px-2 py-0.5 rounded-md border border-red-500/20 transition-colors truncate max-w-[110px] cursor-pointer"
-                            title={`Ver videos relacionados con #${t}`}
+                            title={`Opciones de etiqueta: #${t}`}
                           >
                             #{t}
                           </button>
@@ -1557,6 +1401,19 @@ export const ExploreSearch: React.FC<ExploreSearchProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Menú Flotante Contextual de Etiquetas */}
+      {activeTagMenu && (
+        <TagActionMenu
+          tag={activeTagMenu.tag}
+          position={activeTagMenu.position}
+          onClose={() => setActiveTagMenu(null)}
+          onSearchOnly={(t) => handleSearchTag(t)}
+          onAddToSearch={handleAddToSearch}
+          onExcludeTag={handleExcludeTag}
+          showToast={showToast}
+        />
       )}
     </div>
   );
