@@ -14,7 +14,7 @@ export function invalidateAuthToken(): void {
 }
 
 /** Hace fetch con un timeout en ms (por defecto 15 s). */
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -57,6 +57,7 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<F
     }
 
     if (!contentType.includes('json')) {
+      console.warn(`[RedGIFs] Respuesta no-JSON (${contentType}) en ${url}`);
       return { success: false, status: res.status };
     }
 
@@ -68,6 +69,7 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<F
       return { success: false, status: res.status };
     }
   } catch (err: any) {
+    console.warn(`[RedGIFs] Error de red en ${url}:`, err.message || err);
     return { success: false };
   }
 }
@@ -87,7 +89,7 @@ async function tryProxyEndpoints<T>(path: string, options: RequestInit): Promise
 
   for (const pUrl of proxyUrls) {
     try {
-      const res = await tryFetchEndpoint<T>(pUrl, options);
+      const res = await tryFetchEndpoint<T>(pUrl, { ...options, signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined });
       if (res.success && res.data !== undefined) {
         return res;
       }

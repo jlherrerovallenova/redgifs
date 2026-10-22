@@ -42,13 +42,17 @@ export default {
           headers,
         });
 
-        const body = await upstream.arrayBuffer();
-        const resHeaders = new Headers(upstream.headers);
-        resHeaders.set('Access-Control-Allow-Origin', '*');
+        const text = await upstream.text();
+        const contentType = upstream.headers.get('content-type') || 'application/json';
 
-        return new Response(body, {
+        return new Response(text, {
           status: upstream.status,
-          headers: resHeaders,
+          headers: {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
+            'Access-Control-Allow-Headers': '*',
+          },
         });
       } catch (err: any) {
         return new Response(
@@ -72,6 +76,7 @@ export default {
       const headers: Record<string, string> = {
         'Referer': 'https://www.redgifs.com/',
         'Origin': 'https://www.redgifs.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       };
 
       try {
@@ -81,12 +86,15 @@ export default {
         });
 
         const body = await upstream.arrayBuffer();
-        const resHeaders = new Headers(upstream.headers);
-        resHeaders.set('Access-Control-Allow-Origin', '*');
+        const contentType = upstream.headers.get('content-type') || 'video/mp4';
 
         return new Response(body, {
           status: upstream.status,
-          headers: resHeaders,
+          headers: {
+            'Content-Type': contentType,
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          },
         });
       } catch (err: any) {
         return new Response(null, { status: 502 });

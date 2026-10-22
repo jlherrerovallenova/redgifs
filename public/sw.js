@@ -1,7 +1,7 @@
 // Service Worker con Arquitectura de Cache Determinista - RedGIFs Pro
 // Optimizado según principios de Addy Osmani (PRPL + Cache-First para Assets Hasheados)
 
-const CACHE_VERSION = 'v1.2.1';
+const CACHE_VERSION = 'v1.2.2';
 const STATIC_CACHE = `redgifs-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `redgifs-runtime-${CACHE_VERSION}`;
 
