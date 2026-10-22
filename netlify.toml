@@ -2,7 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
-# Redirigir rutas al index.html para la SPA de React (las funciones en /api/... tienen prioridad)
+# Redirección explícita a la función para /api/redgifs/*
+[[redirects]]
+  from = "/api/redgifs/*"
+  to = "/.netlify/functions/redgifs/:splat"
+  status = 200
+
+# Redirigir el resto de rutas al index.html para React SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"
