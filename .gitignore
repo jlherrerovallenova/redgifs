@@ -19,6 +19,12 @@ downloads/*.webm
 downloads/*.mov
 !downloads/.gitkeep
 
+# Netlify
+.netlify/
+
+# Cloudflare
+.wrangler/
+
 # IDE & OS
 .vscode/
 .idea/

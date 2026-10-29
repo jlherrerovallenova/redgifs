@@ -1,4 +1,4 @@
-import { RedGifItem, SearchResultItem, UserProfile, CreatorFeedResult } from '../types';
+import { RedGifItem, SearchResultItem, UserProfile, CreatorFeedResult, RedGifsCollection, RedGifsUserAccount } from '../types';
 
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
@@ -42,7 +42,6 @@ interface FetchResult<T> {
 async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<FetchResult<T>> {
   try {
     const res = await fetchWithTimeout(url, options);
-    const contentType = res.headers.get('content-type') || '';
 
     if (res.status === 401 || res.status === 403) {
       return { success: false, status: res.status, isAuthError: true };
@@ -56,17 +55,20 @@ async function tryFetchEndpoint<T>(url: string, options: RequestInit): Promise<F
       return { success: false, status: res.status };
     }
 
-    if (!contentType.includes('json')) {
-      console.warn(`[RedGIFs] Respuesta no-JSON (${contentType}) en ${url}`);
-      return { success: false, status: res.status };
+    if (res.status === 204) {
+      return { success: true, data: {} as T, status: res.status };
     }
 
     const text = await res.text();
+    if (!text || !text.trim()) {
+      return { success: true, data: {} as T, status: res.status };
+    }
+
     try {
       const parsed = JSON.parse(text) as T;
       return { success: true, data: parsed, status: res.status };
     } catch {
-      return { success: false, status: res.status };
+      return { success: true, data: text as any, status: res.status };
     }
   } catch (err: any) {
     console.warn(`[RedGIFs] Error de red en ${url}:`, err.message || err);
@@ -129,6 +131,8 @@ async function tryProxyEndpoints<T>(path: string, options: RequestInit): Promise
  * Petición principal a RedGIFs con fallback múltiple y autorrecuperación de token si caduca.
  */
 async function requestRedGifsJson<T = any>(path: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
+  const isCustomAuth = Boolean((options.headers as any)?.Authorization);
+
   // 1. Probar proxy Vite local (/api/redgifs) en entorno dev
   const viteRes = await tryFetchEndpoint<T>(`/api/redgifs${path}`, options);
   if (viteRes.success && viteRes.data !== undefined) {
@@ -137,14 +141,19 @@ async function requestRedGifsJson<T = any>(path: string, options: RequestInit = 
   if (viteRes.isNotFound) {
     throw new Error('El recurso solicitado no existe o ha sido eliminado.');
   }
-  if (viteRes.isAuthError && retryCount === 0) {
-    invalidateAuthToken();
-    const freshToken = await getAuthToken(true);
-    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
-    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+  if (viteRes.isAuthError) {
+    if (isCustomAuth) {
+      throw new Error('La sesión de tu cuenta de RedGIFs ha caducado o no es válida. Por favor reconecta tu cuenta.');
+    }
+    if (retryCount === 0) {
+      invalidateAuthToken();
+      const freshToken = await getAuthToken(true);
+      const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+      return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+    }
   }
 
-  // 2. Probar llamada directa a la API pública de RedGIFs
+  // 2. Probar llamada directa a la API pública de RedGIFs (soporta CORS nativo)
   const directRes = await tryFetchEndpoint<T>(`https://api.redgifs.com/v2${path}`, options);
   if (directRes.success && directRes.data !== undefined) {
     return directRes.data;
@@ -152,26 +161,33 @@ async function requestRedGifsJson<T = any>(path: string, options: RequestInit = 
   if (directRes.isNotFound) {
     throw new Error('El recurso solicitado no existe o ha sido eliminado.');
   }
-  if (directRes.isAuthError && retryCount === 0) {
-    invalidateAuthToken();
-    const freshToken = await getAuthToken(true);
-    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
-    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+  if (directRes.isAuthError) {
+    if (isCustomAuth) {
+      throw new Error('La sesión de tu cuenta de RedGIFs ha caducado o no es válida. Por favor reconecta tu cuenta.');
+    }
+    if (retryCount === 0) {
+      invalidateAuthToken();
+      const freshToken = await getAuthToken(true);
+      const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+      return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+    }
   }
 
-  // 3. Probar proxies CORS redundantes
-  const proxyRes = await tryProxyEndpoints<T>(path, options);
-  if (proxyRes.success && proxyRes.data !== undefined) {
-    return proxyRes.data;
-  }
-  if (proxyRes.isNotFound) {
-    throw new Error('El recurso solicitado no existe o ha sido eliminado.');
-  }
-  if (proxyRes.isAuthError && retryCount === 0) {
-    invalidateAuthToken();
-    const freshToken = await getAuthToken(true);
-    const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
-    return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+  // 3. Probar proxies CORS redundantes (solo para peticiones GET)
+  if (!options.method || options.method === 'GET') {
+    const proxyRes = await tryProxyEndpoints<T>(path, options);
+    if (proxyRes.success && proxyRes.data !== undefined) {
+      return proxyRes.data;
+    }
+    if (proxyRes.isNotFound) {
+      throw new Error('El recurso solicitado no existe o ha sido eliminado.');
+    }
+    if (proxyRes.isAuthError && !isCustomAuth && retryCount === 0) {
+      invalidateAuthToken();
+      const freshToken = await getAuthToken(true);
+      const newHeaders = { ...(options.headers as any), Authorization: `Bearer ${freshToken}` };
+      return requestRedGifsJson<T>(path, { ...options, headers: newHeaders }, 1);
+    }
   }
 
   // 4. Si falló por corte de red o suspensión temporal de la pestaña/iPad, reintentar tras breve pausa
@@ -1091,3 +1107,384 @@ export async function triggerBlobDownload(blob: Blob, filename: string, original
   }
 }
 
+
+/**
+ * Mapea un objeto de GIF crudo de la API de RedGIFs al formato unificado SearchResultItem.
+ */
+export function mapRawGifToSearchResult(g: any): SearchResultItem {
+  const urls = g.urls || {};
+  return {
+    id: g.id,
+    title: (g.tags && g.tags.length > 0 ? g.tags.slice(0, 3).join(', ') : g.id) || 'Video',
+    userName: g.userName || 'anónimo',
+    duration: Math.round((Number(g.duration) || 0) * 10) / 10,
+    views: Number(g.views) || 0,
+    likes: Number(g.likes) || 0,
+    hasAudio: Boolean(g.hasAudio),
+    verified: Boolean(g.verified),
+    tags: Array.isArray(g.tags) ? g.tags : [],
+    hd_url: urls.hd || urls.sd || '',
+    sd_url: urls.sd || urls.hd || '',
+    silent_url: urls.silent || urls.sd || '',
+    thumbnail_url: urls.thumbnail || urls.poster || '',
+    poster_url: urls.poster || urls.thumbnail || '',
+    watch_url: `https://www.redgifs.com/watch/${g.id}`
+  };
+}
+
+/**
+ * Decodifica de forma segura la carga útil (payload) de un JWT de RedGIFs sin bibliotecas externas.
+ */
+export function parseJwtPayload(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+/** Obtiene el token de usuario guardado en localStorage */
+export function getRedGifsUserToken(): string | null {
+  try {
+    return localStorage.getItem('rg_user_token');
+  } catch {
+    return null;
+  }
+}
+
+/** Obtiene los datos del perfil de cuenta de RedGIFs guardados en localStorage */
+export function getStoredUserAccount(): RedGifsUserAccount | null {
+  try {
+    const saved = localStorage.getItem('rg_user_account');
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Comprueba si el usuario tiene una cuenta de RedGIFs conectada */
+export function isUserAccountConnected(): boolean {
+  return Boolean(getRedGifsUserToken());
+}
+
+/** Desconecta la cuenta de RedGIFs y limpia el almacenamiento local */
+export function disconnectUserAccount(): void {
+  try {
+    localStorage.removeItem('rg_user_token');
+    localStorage.removeItem('rg_user_account');
+    localStorage.removeItem('rg_redgifs_cached_collections');
+  } catch {}
+}
+
+/**
+ * Conecta y valida una cuenta de RedGIFs con el token de sesión/usuario.
+ * Verifica inmediatamente el acceso con la API y obtiene el perfil y colecciones.
+ */
+export async function connectUserAccount(rawToken: string): Promise<RedGifsUserAccount> {
+  let cleanToken = rawToken.trim();
+  if (cleanToken.toLowerCase().startsWith('bearer ')) {
+    cleanToken = cleanToken.slice(7).trim();
+  }
+  cleanToken = cleanToken.replace(/^["']|["']$/g, '');
+
+  if (!cleanToken || cleanToken.length < 20) {
+    throw new Error('El token de autorización introducido no es válido o está incompleto.');
+  }
+
+  // 1. Probar validez del token en el endpoint oficial de colecciones
+  let collectionsRes: any;
+  try {
+    collectionsRes = await requestRedGifsJson<any>('/me/collections?count=10&page=1', {
+      headers: {
+        Authorization: `Bearer ${cleanToken}`
+      }
+    });
+  } catch (err: any) {
+    console.error('Error al validar token de RedGIFs:', err);
+    throw new Error('No se pudo verificar el token de usuario. Asegúrate de haber iniciado sesión en redgifs.com y de copiar el token completo.');
+  }
+
+  // 2. Extraer nombre de usuario: del JWT, de la respuesta o de endpoints auxiliares
+  let username = '';
+  let name = '';
+  let profileImageUrl = '';
+
+  const jwt = parseJwtPayload(cleanToken);
+  if (jwt) {
+    if (typeof jwt.username === 'string') username = jwt.username;
+    else if (typeof jwt.sub === 'string' && jwt.sub.startsWith('user/')) {
+      username = jwt.sub.replace('user/', '');
+    } else if (typeof jwt.preferred_username === 'string') {
+      username = jwt.preferred_username;
+    }
+  }
+
+  if (!username && Array.isArray(collectionsRes?.collections) && collectionsRes.collections.length > 0) {
+    username = collectionsRes.collections[0].userName || '';
+  }
+
+  if (!username) {
+    try {
+      const meRes = await tryFetchEndpoint<any>('https://api.redgifs.com/v1/me', {
+        headers: { Authorization: `Bearer ${cleanToken}` }
+      });
+      if (meRes.success && meRes.data) {
+        username = meRes.data.username || meRes.data.name || '';
+        name = meRes.data.name || '';
+        profileImageUrl = meRes.data.profileImageUrl || '';
+      }
+    } catch {}
+  }
+
+  if (!username) {
+    username = jwt?.sub ? `usuario_${String(jwt.sub).slice(-6)}` : 'Mi Cuenta RedGIFs';
+  }
+
+  if (!profileImageUrl && username && !username.startsWith('usuario_') && username !== 'Mi Cuenta RedGIFs') {
+    try {
+      const feed = await getCreatorFeed(username, 'recent', 1, 1);
+      const prof = feed.user;
+      if (prof?.profileImageUrl) profileImageUrl = prof.profileImageUrl;
+      if (prof?.name) name = prof.name;
+    } catch {}
+  }
+
+  const account: RedGifsUserAccount = {
+    token: cleanToken,
+    username,
+    name: name || username,
+    profileImageUrl,
+    connectedAt: Date.now()
+  };
+
+  try {
+    localStorage.setItem('rg_user_token', cleanToken);
+    localStorage.setItem('rg_user_account', JSON.stringify(account));
+    if (Array.isArray(collectionsRes?.collections)) {
+      const mappedCollections: RedGifsCollection[] = collectionsRes.collections.map((c: any) => ({
+        folderId: c.folderId || c.id,
+        folderName: c.folderName || c.name || 'Sin título',
+        published: Boolean(c.published),
+        totalItems: Number(c.totalItems || c.count || 0),
+        description: c.description,
+        thumbs: c.thumbs || c.thumbnail,
+        userName: c.userName || username
+      }));
+      localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(mappedCollections));
+    }
+  } catch {}
+
+  return account;
+}
+
+/**
+ * Obtiene todas las listas/colecciones del usuario conectado en RedGIFs.
+ */
+export async function fetchMyRedGifsCollections(forceRefresh = false): Promise<RedGifsCollection[]> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  if (!forceRefresh) {
+    try {
+      const cached = localStorage.getItem('rg_redgifs_cached_collections');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+
+  const res = await requestRedGifsJson<any>('/me/collections?count=100&page=1', {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const collections: RedGifsCollection[] = (res.collections || []).map((c: any) => ({
+    folderId: c.folderId || c.id,
+    folderName: c.folderName || c.name || 'Sin título',
+    published: Boolean(c.published),
+    totalItems: Number(c.totalItems || c.count || 0),
+    description: c.description,
+    thumbs: c.thumbs || c.thumbnail,
+    userName: c.userName
+  }));
+
+  try {
+    localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(collections));
+  } catch {}
+
+  return collections;
+}
+
+/**
+ * Obtiene los videos contenidos dentro de una lista/colección específica de RedGIFs.
+ */
+export async function fetchRedGifsCollectionGifs(
+  collectionId: string,
+  page = 1,
+  count = 30
+): Promise<{ items: SearchResultItem[]; page: number; pages: number; total: number }> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  const res = await requestRedGifsJson<any>(`/me/collections/${collectionId}/gifs?count=${count}&page=${page}`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const rawGifs: any[] = res.gifs || [];
+  const items = rawGifs.map(mapRawGifToSearchResult);
+
+  return {
+    items,
+    page: Number(res.page) || page,
+    pages: Number(res.pages) || 1,
+    total: Number(res.total) || items.length
+  };
+}
+
+/**
+ * Añade un GIF/video a una lista/colección de la cuenta de RedGIFs del usuario.
+ */
+export async function addGifToRedGifsCollection(collectionId: string, gifId: string): Promise<boolean> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  await requestRedGifsJson<any>(`/me/collections/${collectionId}/gifs`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ gifId, context: 'collection' })
+  });
+
+  try {
+    const cached = localStorage.getItem('rg_redgifs_cached_collections');
+    if (cached) {
+      const collections: RedGifsCollection[] = JSON.parse(cached);
+      const updated = collections.map(c => (c.folderId === collectionId ? { ...c, totalItems: c.totalItems + 1 } : c));
+      localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(updated));
+    }
+  } catch {}
+
+  return true;
+}
+
+/**
+ * Elimina un GIF/video de una lista/colección de la cuenta de RedGIFs del usuario.
+ */
+export async function removeGifFromRedGifsCollection(collectionId: string, gifId: string): Promise<boolean> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  await requestRedGifsJson<any>(`/me/collections/${collectionId}/gifs`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify([gifId])
+  });
+
+  try {
+    const cached = localStorage.getItem('rg_redgifs_cached_collections');
+    if (cached) {
+      const collections: RedGifsCollection[] = JSON.parse(cached);
+      const updated = collections.map(c =>
+        c.folderId === collectionId ? { ...c, totalItems: Math.max(0, c.totalItems - 1) } : c
+      );
+      localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(updated));
+    }
+  } catch {}
+
+  return true;
+}
+
+/**
+ * Crea una nueva lista/colección directamente en la cuenta de RedGIFs del usuario.
+ */
+export async function createRedGifsCollection(name: string, description = '', isPrivate = false): Promise<RedGifsCollection> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  const res = await requestRedGifsJson<any>('/me/collections', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      folderName: name.trim(),
+      description: description.trim(),
+      published: !isPrivate
+    })
+  });
+
+  const created: RedGifsCollection = {
+    folderId: res.folderId || res.id || String(Date.now()),
+    folderName: res.folderName || name.trim(),
+    published: !isPrivate,
+    totalItems: 0,
+    description: res.description || description.trim()
+  };
+
+  try {
+    const cached = localStorage.getItem('rg_redgifs_cached_collections');
+    const list: RedGifsCollection[] = cached ? JSON.parse(cached) : [];
+    list.unshift(created);
+    localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(list));
+  } catch {}
+
+  return created;
+}
+
+/**
+ * Elimina una lista/colección de la cuenta de RedGIFs del usuario.
+ */
+export async function deleteRedGifsCollection(collectionId: string): Promise<boolean> {
+  const token = getRedGifsUserToken();
+  if (!token) {
+    throw new Error('No has conectado tu cuenta de RedGIFs.');
+  }
+
+  await requestRedGifsJson<any>(`/me/collections/${collectionId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  try {
+    const cached = localStorage.getItem('rg_redgifs_cached_collections');
+    if (cached) {
+      const list: RedGifsCollection[] = JSON.parse(cached);
+      const updated = list.filter(c => c.folderId !== collectionId);
+      localStorage.setItem('rg_redgifs_cached_collections', JSON.stringify(updated));
+    }
+  } catch {}
+
+  return true;
+}

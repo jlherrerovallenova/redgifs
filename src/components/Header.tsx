@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart, Ban } from 'lucide-react';
+import { ArrowLeft, Download, Layers, Search, History, User, Smartphone, Sparkles, Film, Heart, Ban, Globe } from 'lucide-react';
+import { RedGifsUserAccount } from '../types';
 
 interface HeaderProps {
   activeTab: 'discover' | 'single' | 'batch' | 'explore' | 'creators' | 'favorites' | 'history';
@@ -7,6 +8,8 @@ interface HeaderProps {
   historyCount: number;
   favoritesCount?: number;
   blockedCount?: number;
+  redGifsAccount?: RedGifsUserAccount | null;
+  onOpenAccountModal?: () => void;
   onOpenBlockedModal?: () => void;
   onOpenInstallModal?: () => void;
   onOpenTheater?: () => void;
@@ -21,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   historyCount,
   favoritesCount = 0,
   blockedCount = 0,
+  redGifsAccount,
+  onOpenAccountModal,
   onOpenBlockedModal,
   onOpenInstallModal,
   onOpenTheater,
@@ -207,6 +212,42 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </button>
+
+          {/* Botón Conexión Cuenta RedGIFs */}
+          {onOpenAccountModal && (
+            redGifsAccount ? (
+              <button
+                type="button"
+                onClick={onOpenAccountModal}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-emerald-500/40 text-white text-xs font-bold transition-all cursor-pointer shadow-sm group shrink-0"
+                title={`Cuenta conectada: @${redGifsAccount.username}. Clic para ver tus listas.`}
+              >
+                {redGifsAccount.profileImageUrl ? (
+                  <img
+                    src={redGifsAccount.profileImageUrl}
+                    alt={redGifsAccount.username}
+                    className="w-4 h-4 rounded-full object-cover border border-emerald-400"
+                  />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                )}
+                <span className="text-[11px] text-pink-300 max-w-[85px] sm:max-w-[120px] truncate font-semibold">
+                  @{redGifsAccount.username}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAccountModal}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-gradient-to-r from-red-600/20 to-pink-600/20 hover:from-red-600/30 hover:to-pink-600/30 border border-pink-500/40 text-pink-200 text-xs font-bold transition-all cursor-pointer shadow-sm shrink-0"
+                title="Conectar con tu cuenta oficial de www.redgifs.com"
+              >
+                <Globe className="w-3.5 h-3.5 text-pink-400" />
+                <span className="hidden sm:inline">Conectar RedGIFs</span>
+                <span className="sm:hidden text-[11px]">Conectar</span>
+              </button>
+            )
+          )}
 
           {/* Botón Creadores Bloqueados */}
           {onOpenBlockedModal && (

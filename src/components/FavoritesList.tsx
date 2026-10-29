@@ -27,17 +27,26 @@ import {
   MoveRight,
   Share2
 } from 'lucide-react';
-import { SearchResultItem, RedGifItem, CustomList } from '../types';
-import { downloadVideoFile, getVideoInfo } from '../services/redgifs';
+import { SearchResultItem, RedGifItem, CustomList, RedGifsCollection, RedGifsUserAccount } from '../types';
+import { downloadVideoFile, getVideoInfo, fetchRedGifsCollectionGifs } from '../services/redgifs';
+import { Globe, Lock, Laptop } from 'lucide-react';
 
 interface FavoritesListProps {
   lists: CustomList[];
   activeListId: string;
+  redGifsAccount?: RedGifsUserAccount | null;
+  redGifsCollections?: RedGifsCollection[];
+  isLoadingRedGifsCollections?: boolean;
   onSelectList: (listId: string) => void;
   onCreateList: (name: string, icon?: string, color?: string, description?: string) => string;
   onDeleteList: (listId: string) => void;
   onRenameList: (listId: string, name: string, icon?: string, color?: string) => void;
   onRemoveVideoFromList: (listId: string, videoId: string) => void;
+  onRefreshRedGifsCollections?: () => Promise<void>;
+  onCreateRedGifsCollection?: (name: string, description?: string, isPrivate?: boolean) => Promise<void>;
+  onDeleteRedGifsCollection?: (collectionId: string) => Promise<void>;
+  onRemoveVideoFromRedGifsCollection?: (collectionId: string, videoId: string) => Promise<void>;
+  onOpenAccountModal?: () => void;
   onOpenSaveToListModal: (video: SearchResultItem) => void;
   onOpenLightbox: (url: string, title: string, tags?: string[], userName?: string, originalItem?: SearchResultItem) => void;
   onOpenTheater?: (videos: SearchResultItem[], startIndex: number) => void;
@@ -78,11 +87,19 @@ function getGridColsClass(cols: 2 | 3 | 4 | 5) {
 export const FavoritesList: React.FC<FavoritesListProps> = ({
   lists,
   activeListId,
+  redGifsAccount,
+  redGifsCollections = [],
+  isLoadingRedGifsCollections = false,
   onSelectList,
   onCreateList,
   onDeleteList,
   onRenameList,
   onRemoveVideoFromList,
+  onRefreshRedGifsCollections,
+  onCreateRedGifsCollection,
+  onDeleteRedGifsCollection,
+  onRemoveVideoFromRedGifsCollection,
+  onOpenAccountModal,
   onOpenSaveToListModal,
   onOpenLightbox,
   onOpenTheater,
@@ -94,8 +111,54 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
   onClearActiveList,
   showToast
 }) => {
-  // Lista activa actual
+  const [redGifsVideos, setRedGifsVideos] = useState<Record<string, SearchResultItem[]>>({});
+  const [loadingRedGifsColl, setLoadingRedGifsColl] = useState(false);
+  const [isCreatingRedGifsColl, setIsCreatingRedGifsColl] = useState(false);
+  const [newRedGifsName, setNewRedGifsName] = useState('');
+  const [newRedGifsDesc, setNewRedGifsDesc] = useState('');
+  const [newRedGifsPrivate, setNewRedGifsPrivate] = useState(false);
+  const [isSavingRedGifs, setIsSavingRedGifs] = useState(false);
+
+  const isRedGifsList = activeListId.startsWith('rg_coll_');
+  const activeRedGifsCollId = isRedGifsList ? activeListId.replace('rg_coll_', '') : null;
+  const currentRedGifsColl = useMemo(() => {
+    return activeRedGifsCollId
+      ? redGifsCollections.find(c => c.folderId === activeRedGifsCollId) || null
+      : null;
+  }, [activeRedGifsCollId, redGifsCollections]);
+
+  // Cargar videos de colección RedGIFs cuando se activa
+  React.useEffect(() => {
+    if (isRedGifsList && activeRedGifsCollId) {
+      if (!redGifsVideos[activeRedGifsCollId]) {
+        setLoadingRedGifsColl(true);
+        fetchRedGifsCollectionGifs(activeRedGifsCollId, 1, 60)
+          .then(res => {
+            setRedGifsVideos(prev => ({ ...prev, [activeRedGifsCollId]: res.items }));
+          })
+          .catch(err => {
+            console.error('Error cargando colección RedGIFs:', err);
+            showToast(err.message || 'Error al cargar videos de tu lista de RedGIFs');
+          })
+          .finally(() => {
+            setLoadingRedGifsColl(false);
+          });
+      }
+    }
+  }, [isRedGifsList, activeRedGifsCollId, redGifsVideos]);
+
+  // Lista activa actual (local o de RedGIFs)
   const currentList = useMemo(() => {
+    if (isRedGifsList && activeRedGifsCollId) {
+      return {
+        id: activeListId,
+        name: currentRedGifsColl?.folderName || 'Lista de RedGIFs',
+        icon: '🌐',
+        color: 'pink',
+        createdAt: Date.now(),
+        videos: redGifsVideos[activeRedGifsCollId] || []
+      };
+    }
     return lists.find(l => l.id === activeListId) || lists[0] || {
       id: 'default',
       name: 'Favoritos',
@@ -104,7 +167,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
       createdAt: Date.now(),
       videos: []
     };
-  }, [lists, activeListId]);
+  }, [lists, activeListId, isRedGifsList, activeRedGifsCollId, currentRedGifsColl, redGifsVideos]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -240,8 +303,23 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
     showToast(`Lista actualizada a "${clean}"`);
   };
 
-  // Eliminar Lista con confirmación
-  const handleDeleteCurrentList = () => {
+  // Eliminar Lista con confirmación (local o en RedGIFs)
+  const handleDeleteCurrentList = async () => {
+    if (isRedGifsList && activeRedGifsCollId) {
+      if (window.confirm(`¿Estás seguro de que deseas eliminar la lista "${currentList.name}" de tu cuenta oficial de RedGIFs?`)) {
+        if (onDeleteRedGifsCollection) {
+          try {
+            await onDeleteRedGifsCollection(activeRedGifsCollId);
+            onSelectList('default');
+            showToast(`Lista "${currentList.name}" eliminada de RedGIFs`);
+          } catch (err: any) {
+            showToast(err.message || 'Error al eliminar la lista de RedGIFs');
+          }
+        }
+      }
+      return;
+    }
+
     if (currentList.id === 'default') {
       showToast('La lista principal no puede ser eliminada');
       return;
@@ -249,6 +327,59 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
     if (window.confirm(`¿Estás seguro de que quieres eliminar la lista "${currentList.name}" con sus ${currentList.videos.length} videos?`)) {
       onDeleteList(currentList.id);
       showToast(`Lista "${currentList.name}" eliminada`);
+    }
+  };
+
+  const handleRefreshCurrentRedGifs = async () => {
+    if (!activeRedGifsCollId) return;
+    setLoadingRedGifsColl(true);
+    try {
+      const res = await fetchRedGifsCollectionGifs(activeRedGifsCollId, 1, 60);
+      setRedGifsVideos(prev => ({ ...prev, [activeRedGifsCollId]: res.items }));
+      showToast(`Lista "${currentList.name}" actualizada (${res.items.length} videos)`);
+    } catch (err: any) {
+      showToast(err.message || 'Error al actualizar lista de RedGIFs');
+    } finally {
+      setLoadingRedGifsColl(false);
+    }
+  };
+
+  const handleRemoveVideoUnified = async (videoId: string) => {
+    if (isRedGifsList && activeRedGifsCollId) {
+      if (onRemoveVideoFromRedGifsCollection) {
+        try {
+          await onRemoveVideoFromRedGifsCollection(activeRedGifsCollId, videoId);
+          setRedGifsVideos(prev => ({
+            ...prev,
+            [activeRedGifsCollId]: (prev[activeRedGifsCollId] || []).filter(v => v.id !== videoId)
+          }));
+          showToast(`Eliminado de "${currentList.name}" en RedGIFs`);
+        } catch (err: any) {
+          showToast(err.message || 'Error al eliminar de RedGIFs');
+        }
+      }
+    } else {
+      onRemoveVideoFromList(currentList.id, videoId);
+      showToast(`Eliminado de "${currentList.name}"`);
+    }
+  };
+
+  const handleCreateRedGifsCollSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = newRedGifsName.trim();
+    if (!clean) return;
+    if (!onCreateRedGifsCollection) return;
+    setIsSavingRedGifs(true);
+    try {
+      await onCreateRedGifsCollection(clean, newRedGifsDesc.trim(), newRedGifsPrivate);
+      setNewRedGifsName('');
+      setNewRedGifsDesc('');
+      setIsCreatingRedGifsColl(false);
+      showToast(`¡Lista "${clean}" creada en tu cuenta de RedGIFs!`);
+    } catch (err: any) {
+      showToast(err.message || 'Error al crear lista en RedGIFs');
+    } finally {
+      setIsSavingRedGifs(false);
     }
   };
 
@@ -406,36 +537,118 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
           </div>
         </div>
 
-        {/* Carrusel / Barra Horizontal de Listas */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-          {lists.map((list) => {
-            const isActive = list.id === currentList.id;
+        {/* Carrusel / Barra Horizontal de Listas: Locales + RedGIFs */}
+        <div className="space-y-2">
+          {/* Fila de RedGIFs si está conectado o botón de conectar */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-red-950/40 border border-red-500/30 text-[11px] font-bold text-red-300 shrink-0">
+              <Globe className="w-3.5 h-3.5 text-pink-400" />
+              <span>RedGIFs.com:</span>
+            </div>
 
-            return (
+            {redGifsAccount ? (
+              <>
+                {redGifsCollections.map((coll) => {
+                  const collListId = 'rg_coll_' + coll.folderId;
+                  const isActive = collListId === currentList.id;
+                  const count = redGifsVideos[coll.folderId]?.length ?? coll.totalItems;
+
+                  return (
+                    <button
+                      key={coll.folderId}
+                      type="button"
+                      onClick={() => {
+                        onSelectList(collListId);
+                        setSearchQuery('');
+                        setActiveTag(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border cursor-pointer ${
+                        isActive
+                          ? 'bg-gradient-to-r from-red-600 via-pink-600 to-purple-600 text-white border-transparent shadow-md shadow-pink-600/30 scale-105'
+                          : 'bg-black/40 hover:bg-white/10 text-slate-300 border-white/10 hover:border-pink-500/40'
+                      }`}
+                    >
+                      <span className="text-sm">📁</span>
+                      <span className="truncate max-w-[130px]">{coll.folderName}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-400'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingRedGifsColl(true)}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-pink-400 hover:text-white bg-white/5 hover:bg-white/10 border border-dashed border-pink-500/40 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                  title="Crear nueva lista en tu cuenta de RedGIFs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Lista RedGIFs</span>
+                </button>
+
+                {onRefreshRedGifsCollections && (
+                  <button
+                    type="button"
+                    onClick={onRefreshRedGifsCollections}
+                    disabled={isLoadingRedGifsCollections}
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/10 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                    title="Sincronizar listas desde RedGIFs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRedGifsCollections ? 'animate-spin text-pink-400' : ''}`} />
+                  </button>
+                )}
+              </>
+            ) : (
               <button
-                key={list.id}
                 type="button"
-                onClick={() => {
-                  onSelectList(list.id);
-                  setSearchQuery('');
-                  setActiveTag(null);
-                }}
-                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border cursor-pointer ${
-                  isActive
-                    ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 text-white border-transparent shadow-lg shadow-pink-600/30 scale-105'
-                    : 'bg-black/40 hover:bg-white/10 text-slate-300 border-white/10'
-                }`}
+                onClick={onOpenAccountModal}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-red-600/20 to-pink-600/20 hover:from-red-600/30 hover:to-pink-600/30 text-pink-300 border border-pink-500/40 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-sm"
               >
-                <span className="text-base">{list.icon || '📁'}</span>
-                <span className="truncate max-w-[140px]">{list.name}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-400'
-                }`}>
-                  {list.videos.length}
-                </span>
+                <Globe className="w-3.5 h-3.5 text-pink-400" />
+                <span>Conectar tu cuenta para ver tus listas de RedGIFs</span>
               </button>
-            );
-          })}
+            )}
+          </div>
+
+          {/* Fila de Listas Locales */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-[11px] font-bold text-slate-400 shrink-0">
+              <Laptop className="w-3.5 h-3.5 text-purple-400" />
+              <span>Locales:</span>
+            </div>
+
+            {lists.map((list) => {
+              const isActive = list.id === currentList.id;
+
+              return (
+                <button
+                  key={list.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectList(list.id);
+                    setSearchQuery('');
+                    setActiveTag(null);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-2xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 border cursor-pointer ${
+                    isActive
+                      ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-rose-600 text-white border-transparent shadow-lg shadow-pink-600/30 scale-105'
+                      : 'bg-black/40 hover:bg-white/10 text-slate-300 border-white/10'
+                  }`}
+                >
+                  <span className="text-base">{list.icon || '📁'}</span>
+                  <span className="truncate max-w-[140px]">{list.name}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-slate-400'
+                  }`}>
+                    {list.videos.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -450,16 +663,42 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
               <h1 className="text-xl sm:text-2xl font-black font-display text-white truncate">
                 {currentList.name}
               </h1>
-              {currentList.id !== 'default' && (
-                <button
-                  type="button"
-                  onClick={handleStartEditing}
-                  aria-label="Editar nombre de la lista"
-                  className="p-1 rounded-lg bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                  title="Editar nombre e icono"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
+              {isRedGifsList ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] bg-gradient-to-r from-red-600 to-pink-600 text-white font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                    <Globe className="w-3 h-3" /> RedGIFs Oficial
+                  </span>
+                  {currentRedGifsColl?.published ? (
+                    <span className="text-[10px] bg-white/10 text-slate-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Globe className="w-2.5 h-2.5" /> Pública
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" /> Privada
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleRefreshCurrentRedGifs}
+                    disabled={loadingRedGifsColl}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition-colors cursor-pointer"
+                    title="Recargar videos de esta lista desde RedGIFs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingRedGifsColl ? 'animate-spin text-pink-400' : ''}`} />
+                  </button>
+                </div>
+              ) : (
+                currentList.id !== 'default' && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditing}
+                    aria-label="Editar nombre de la lista"
+                    className="p-1 rounded-lg bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title="Editar nombre e icono"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                )
               )}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
@@ -659,11 +898,23 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
             </p>
           </div>
         </div>
+      ) : loadingRedGifsColl ? (
+        <div className="py-20 text-center space-y-3 bg-[#12141c] border border-white/10 rounded-2xl p-6 animate-pulse">
+          <RefreshCw className="w-8 h-8 text-pink-500 animate-spin mx-auto" />
+          <h4 className="text-base font-bold text-white">Cargando videos de tu lista de RedGIFs...</h4>
+          <p className="text-slate-400 text-xs">Obteniendo el contenido directamente de tu cuenta oficial de RedGIFs.</p>
+        </div>
       ) : filteredVideos.length === 0 ? (
         <div className="py-16 text-center space-y-3 bg-[#12141c] border border-white/10 rounded-2xl p-6">
           <Search className="w-8 h-8 text-slate-600 mx-auto" />
-          <h4 className="text-sm font-bold text-white">No hay coincidencias en esta lista</h4>
-          <p className="text-slate-400 text-xs">Prueba a limpiar la barra de búsqueda o los filtros activos.</p>
+          <h4 className="text-sm font-bold text-white">
+            {isRedGifsList ? 'Esta lista de RedGIFs está vacía' : 'No hay coincidencias en esta lista'}
+          </h4>
+          <p className="text-slate-400 text-xs">
+            {isRedGifsList
+              ? 'Puedes añadir videos a esta lista usando el botón de "Guardar en Lista" en cualquier video.'
+              : 'Prueba a limpiar la barra de búsqueda o los filtros activos.'}
+          </p>
         </div>
       ) : (
         /* Grid de Videos */
@@ -683,8 +934,7 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemoveVideoFromList(currentList.id, item.id);
-                    showToast(`Eliminado de "${currentList.name}"`);
+                    handleRemoveVideoUnified(item.id);
                   }}
                   aria-label="Quitar de esta lista"
                   className="absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-xl bg-black/70 backdrop-blur-md text-pink-400 hover:text-red-400 hover:bg-black border border-white/20 flex items-center justify-center transition-transform active:scale-90 cursor-pointer shadow-lg"
@@ -966,6 +1216,80 @@ export const FavoritesList: React.FC<FavoritesListProps> = ({
           </form>
         </div>
       )}
-    </div>
+    
+      {/* Modal Crear Lista en RedGIFs */}
+      {isCreatingRedGifsColl && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <form
+            onSubmit={handleCreateRedGifsCollSubmit}
+            className="bg-[#12141c] border border-white/15 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-scaleUp"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-pink-400" />
+                <span>Nueva Lista en RedGIFs.com</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsCreatingRedGifsColl(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-slate-300 font-bold">Nombre de la lista:</label>
+              <input
+                type="text"
+                value={newRedGifsName}
+                onChange={(e) => setNewRedGifsName(e.target.value)}
+                placeholder="Ej. Bailes Virales, Mis Favoritos, Top VIP..."
+                autoFocus
+                className="w-full bg-black/40 border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-pink-500 font-medium"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-slate-300 font-bold">Descripción (opcional):</label>
+              <input
+                type="text"
+                value={newRedGifsDesc}
+                onChange={(e) => setNewRedGifsDesc(e.target.value)}
+                placeholder="Descripción para tu lista en RedGIFs..."
+                className="w-full bg-black/40 border border-white/20 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-pink-500 font-medium"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
+              <input
+                type="checkbox"
+                checked={newRedGifsPrivate}
+                onChange={(e) => setNewRedGifsPrivate(e.target.checked)}
+                className="w-4 h-4 rounded text-pink-600 focus:ring-pink-500 border-white/20 bg-black/40"
+              />
+              <span>Lista privada (solo visible para ti en redgifs.com)</span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsCreatingRedGifsColl(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingRedGifs || !newRedGifsName.trim()}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 text-white font-bold text-xs shadow-md shadow-pink-600/30 hover:opacity-95 disabled:opacity-50 transition-all cursor-pointer"
+              >
+                {isSavingRedGifs ? 'Creando...' : 'Crear en RedGIFs'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+</div>
   );
 };

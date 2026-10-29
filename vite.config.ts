@@ -27,6 +27,23 @@ function versionPlugin() {
 }
 
 const proxyConfig = {
+  '/api/redgifs/v1': {
+    target: 'https://api.redgifs.com/v1',
+    changeOrigin: true,
+    secure: false,
+    rewrite: (path: string) => path.replace(/^\/api\/redgifs\/v1/, ''),
+    headers: {
+      'Referer': 'https://www.redgifs.com/',
+      'Origin': 'https://www.redgifs.com'
+    },
+    configure: (proxy: any) => {
+      proxy.on('proxyRes', (proxyRes: any) => {
+        proxyRes.headers['access-control-allow-origin'] = '*';
+        proxyRes.headers['access-control-allow-methods'] = 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT';
+        proxyRes.headers['access-control-allow-headers'] = '*';
+      });
+    }
+  },
   '/api/redgifs': {
     target: 'https://api.redgifs.com/v2',
     changeOrigin: true,
@@ -40,7 +57,7 @@ const proxyConfig = {
       proxy.on('proxyRes', (proxyRes: any) => {
         // Permitir explícitamente en Safari / iPadOS para evitar bloqueos de preflight
         proxyRes.headers['access-control-allow-origin'] = '*';
-        proxyRes.headers['access-control-allow-methods'] = 'GET, POST, OPTIONS, HEAD';
+        proxyRes.headers['access-control-allow-methods'] = 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT';
         proxyRes.headers['access-control-allow-headers'] = '*';
       });
     }

@@ -1,12 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { RedGifItem, HistoryItem, SearchResultItem, CustomList } from './types';
+import { RedGifItem, HistoryItem, SearchResultItem, CustomList, RedGifsUserAccount, RedGifsCollection } from './types';
 import { Header } from './components/Header';
 import { DiscoverHub } from './components/DiscoverHub';
 import { TabletBottomDock } from './components/TabletBottomDock';
 import { UpdateNotificationBanner } from './components/UpdateNotificationBanner';
 import { useAppUpdate } from './hooks/useAppUpdate';
-import { searchVideosExtended, getBlockedCreators } from './services/redgifs';
+import {
+  searchVideosExtended,
+  getBlockedCreators,
+  getStoredUserAccount,
+  connectUserAccount,
+  disconnectUserAccount,
+  fetchMyRedGifsCollections,
+  addGifToRedGifsCollection,
+  removeGifFromRedGifsCollection,
+  createRedGifsCollection,
+  deleteRedGifsCollection
+} from './services/redgifs';
 
 // Code-Splitting por Rutas y Modales (Patrón PRPL de Addy Osmani)
 const SingleDownloader = lazy(() => import('./components/SingleDownloader').then(m => ({ default: m.SingleDownloader })));
@@ -20,6 +31,7 @@ const TheaterFeedModal = lazy(() => import('./components/TheaterFeedModal').then
 const SaveToListModal = lazy(() => import('./components/SaveToListModal').then(m => ({ default: m.SaveToListModal })));
 const BlockedCreatorsModal = lazy(() => import('./components/BlockedCreatorsModal').then(m => ({ default: m.BlockedCreatorsModal })));
 const InstallPwaModal = lazy(() => import('./components/InstallPwaModal').then(m => ({ default: m.InstallPwaModal })));
+const RedGifsAccountModal = lazy(() => import('./components/RedGifsAccountModal').then(m => ({ default: m.RedGifsAccountModal })));
 
 function TabLoadingFallback() {
   return (
@@ -140,6 +152,80 @@ export default function App() {
   const [activeListId, setActiveListId] = useState<string>('default');
   const [saveModalVideo, setSaveModalVideo] = useState<SearchResultItem | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+
+  // Estado de Cuenta y Listas de RedGIFs
+  const [redGifsAccount, setRedGifsAccount] = useState<RedGifsUserAccount | null>(() => getStoredUserAccount());
+  const [redGifsCollections, setRedGifsCollections] = useState<RedGifsCollection[]>(() => {
+    try {
+      const saved = localStorage.getItem('rg_redgifs_cached_collections');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isLoadingRedGifsCollections, setIsLoadingRedGifsCollections] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (redGifsAccount) {
+      setIsLoadingRedGifsCollections(true);
+      fetchMyRedGifsCollections()
+        .then(colls => setRedGifsCollections(colls))
+        .catch(err => console.warn('Error al precargar listas de RedGIFs:', err))
+        .finally(() => setIsLoadingRedGifsCollections(false));
+    }
+  }, [redGifsAccount]);
+
+  const handleConnectRedGifs = async (token: string) => {
+    const acc = await connectUserAccount(token);
+    setRedGifsAccount(acc);
+    const colls = await fetchMyRedGifsCollections(true);
+    setRedGifsCollections(colls);
+  };
+
+  const handleDisconnectRedGifs = () => {
+    disconnectUserAccount();
+    setRedGifsAccount(null);
+    setRedGifsCollections([]);
+    if (activeListId.startsWith('rg_coll_')) {
+      setActiveListId('default');
+    }
+    showToast('Cuenta de RedGIFs desconectada');
+  };
+
+  const handleRefreshRedGifsCollections = async () => {
+    setIsLoadingRedGifsCollections(true);
+    try {
+      const colls = await fetchMyRedGifsCollections(true);
+      setRedGifsCollections(colls);
+      showToast(`¡Sincronizadas ${colls.length} listas de RedGIFs!`);
+    } catch (err: any) {
+      showToast(err.message || 'Error al sincronizar listas de RedGIFs');
+    } finally {
+      setIsLoadingRedGifsCollections(false);
+    }
+  };
+
+  const handleToggleVideoInRedGifsCollection = async (collectionId: string, video: SearchResultItem): Promise<boolean> => {
+    await addGifToRedGifsCollection(collectionId, video.id);
+    setRedGifsCollections(prev => prev.map(c => c.folderId === collectionId ? { ...c, totalItems: c.totalItems + 1 } : c));
+    return true;
+  };
+
+  const handleCreateRedGifsCollection = async (name: string, description = '', isPrivate = false) => {
+    const created = await createRedGifsCollection(name, description, isPrivate);
+    setRedGifsCollections(prev => [created, ...prev]);
+  };
+
+  const handleDeleteRedGifsCollection = async (collectionId: string) => {
+    await deleteRedGifsCollection(collectionId);
+    setRedGifsCollections(prev => prev.filter(c => c.folderId !== collectionId));
+  };
+
+  const handleRemoveVideoFromRedGifsCollection = async (collectionId: string, videoId: string) => {
+    await removeGifFromRedGifsCollection(collectionId, videoId);
+    setRedGifsCollections(prev => prev.map(c => c.folderId === collectionId ? { ...c, totalItems: Math.max(0, c.totalItems - 1) } : c));
+  };
 
   const saveLists = (newLists: CustomList[]) => {
     setLists(newLists);
@@ -508,6 +594,8 @@ export default function App() {
         historyCount={history.length}
         favoritesCount={totalFavoritesCount}
         blockedCount={blockedCreators.length}
+        redGifsAccount={redGifsAccount}
+        onOpenAccountModal={() => setIsAccountModalOpen(true)}
         onOpenBlockedModal={() => setIsBlockedModalOpen(true)}
         onOpenInstallModal={() => setIsInstallModalOpen(true)}
         onOpenTheater={() => handleOpenTheater()}
@@ -625,11 +713,19 @@ export default function App() {
             <FavoritesList
               lists={lists}
               activeListId={activeListId}
+              redGifsAccount={redGifsAccount}
+              redGifsCollections={redGifsCollections}
+              isLoadingRedGifsCollections={isLoadingRedGifsCollections}
               onSelectList={setActiveListId}
               onCreateList={handleCreateList}
               onDeleteList={handleDeleteList}
               onRenameList={handleRenameList}
               onRemoveVideoFromList={handleRemoveVideoFromList}
+              onRefreshRedGifsCollections={handleRefreshRedGifsCollections}
+              onCreateRedGifsCollection={handleCreateRedGifsCollection}
+              onDeleteRedGifsCollection={handleDeleteRedGifsCollection}
+              onRemoveVideoFromRedGifsCollection={handleRemoveVideoFromRedGifsCollection}
+              onOpenAccountModal={() => setIsAccountModalOpen(true)}
               onOpenSaveToListModal={handleToggleFavorite}
               onOpenLightbox={handleOpenLightbox}
               onOpenTheater={handleOpenTheater}
@@ -671,12 +767,21 @@ export default function App() {
             isOpen={isSaveModalOpen}
             video={saveModalVideo}
             lists={lists}
+            redGifsAccount={redGifsAccount}
+            redGifsCollections={redGifsCollections}
+            isLoadingRedGifsCollections={isLoadingRedGifsCollections}
             onClose={() => {
               setIsSaveModalOpen(false);
               setSaveModalVideo(null);
             }}
             onToggleVideoInList={handleToggleVideoInList}
             onCreateList={handleCreateList}
+            onToggleVideoInRedGifsCollection={handleToggleVideoInRedGifsCollection}
+            onCreateRedGifsCollection={handleCreateRedGifsCollection}
+            onOpenAccountModal={() => {
+              setIsSaveModalOpen(false);
+              setIsAccountModalOpen(true);
+            }}
             showToast={showToast}
           />
         </Suspense>
@@ -737,6 +842,25 @@ export default function App() {
             onToggleFavorite={handleToggleFavorite}
             isFavorite={isFavorite}
             onBlockCreator={handleBlockCreator}
+            showToast={showToast}
+          />
+        </Suspense>
+      )}
+
+      
+      {/* Modal Conexión de Cuenta de RedGIFs */}
+      {isAccountModalOpen && (
+        <Suspense fallback={null}>
+          <RedGifsAccountModal
+            isOpen={isAccountModalOpen}
+            account={redGifsAccount}
+            collections={redGifsCollections}
+            isLoadingCollections={isLoadingRedGifsCollections}
+            onClose={() => setIsAccountModalOpen(false)}
+            onConnect={handleConnectRedGifs}
+            onDisconnect={handleDisconnectRedGifs}
+            onRefreshCollections={handleRefreshRedGifsCollections}
+            onCreateCollection={handleCreateRedGifsCollection}
             showToast={showToast}
           />
         </Suspense>

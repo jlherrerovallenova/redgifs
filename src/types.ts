@@ -77,3 +77,20 @@ export interface CustomList {
   videos: SearchResultItem[];
 }
 
+export interface RedGifsCollection {
+  folderId: string;
+  folderName: string;
+  published: boolean;
+  totalItems: number;
+  description?: string;
+  thumbs?: string;
+  userName?: string;
+}
+
+export interface RedGifsUserAccount {
+  token: string;
+  username: string;
+  name?: string;
+  profileImageUrl?: string;
+  connectedAt: number;
+}

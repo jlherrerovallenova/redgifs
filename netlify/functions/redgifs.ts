@@ -7,7 +7,7 @@ export default async (req: Request) => {
       status: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT',
         'Access-Control-Allow-Headers': '*',
       },
     });
@@ -28,10 +28,21 @@ export default async (req: Request) => {
     headers['Authorization'] = auth;
   }
 
+  const cType = req.headers.get('content-type');
+  if (cType) {
+    headers['Content-Type'] = cType;
+  }
+
   try {
+    let bodyData: string | undefined = undefined;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      bodyData = await req.text();
+    }
+
     const upstream = await fetch(targetUrl, {
       method: req.method,
       headers,
+      body: bodyData || undefined,
     });
 
     const text = await upstream.text();
@@ -42,7 +53,7 @@ export default async (req: Request) => {
       headers: {
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT',
         'Access-Control-Allow-Headers': '*',
       },
     });
@@ -67,7 +78,7 @@ export const handler: Handler = async (event) => {
       statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT',
         'Access-Control-Allow-Headers': '*',
       },
       body: '',
@@ -97,10 +108,16 @@ export const handler: Handler = async (event) => {
     headers['Authorization'] = auth;
   }
 
+  const cType = event.headers['content-type'] || event.headers['Content-Type'];
+  if (cType) {
+    headers['Content-Type'] = cType;
+  }
+
   try {
     const upstream = await fetch(targetUrl, {
       method: event.httpMethod,
       headers,
+      body: event.httpMethod !== 'GET' && event.httpMethod !== 'HEAD' ? event.body || undefined : undefined,
     });
 
     const text = await upstream.text();
@@ -111,7 +128,7 @@ export const handler: Handler = async (event) => {
       headers: {
         'Content-Type': contentType,
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, HEAD, PATCH, DELETE, PUT',
         'Access-Control-Allow-Headers': '*',
       },
       body: text,
