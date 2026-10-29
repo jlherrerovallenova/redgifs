@@ -166,6 +166,30 @@ export default function App() {
   const [isLoadingRedGifsCollections, setIsLoadingRedGifsCollections] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
+  // Auto-conexión desde enlace rápido o código QR (#token=...)
+  useEffect(() => {
+    try {
+      const hash = window.location.hash;
+      if (hash && hash.includes('token=')) {
+        const params = new URLSearchParams(hash.replace(/^#/, ''));
+        const tokenFromHash = params.get('token');
+        if (tokenFromHash && tokenFromHash.trim()) {
+          connectUserAccount(tokenFromHash.trim()).then(acc => {
+            if (acc) {
+              setRedGifsAccount(acc);
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+              showToast(`¡Conectado con éxito a tu cuenta de RedGIFs: @${acc.username}! 🎉`);
+            }
+          }).catch(err => {
+            console.error('Error al conectar token desde URL:', err);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error al procesar token desde hash:', e);
+    }
+  }, []);
+
   useEffect(() => {
     if (redGifsAccount) {
       setIsLoadingRedGifsCollections(true);

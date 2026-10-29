@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Check,
@@ -17,8 +17,12 @@ import {
   ShieldCheck,
   Terminal,
   Database,
-  Bookmark
+  Bookmark,
+  QrCode,
+  Smartphone,
+  Share2
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { RedGifsUserAccount, RedGifsCollection } from '../types';
 
 interface RedGifsAccountModalProps {
@@ -49,9 +53,13 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
   const [tokenInput, setTokenInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [guideTab, setGuideTab] = useState<'visual' | 'console' | 'bookmarklet'>('visual');
+  const [guideTab, setGuideTab] = useState<'visual' | 'ipad' | 'console'>('visual');
   const [copiedCommand, setCopiedCommand] = useState(false);
-  const [copiedBookmarklet, setCopiedBookmarklet] = useState(false);
+  const [copiedQuickLink, setCopiedQuickLink] = useState(false);
+
+  // QR Code para sincronización con iPad / Móvil
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   // Crear colección directa
   const [isCreatingColl, setIsCreatingColl] = useState(false);
@@ -60,10 +68,29 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
   const [newCollPrivate, setNewCollPrivate] = useState(false);
   const [isSavingColl, setIsSavingColl] = useState(false);
 
+  // Generar QR cuando la cuenta está conectada
+  useEffect(() => {
+    if (account?.token) {
+      const quickUrl = `${window.location.origin}/#token=${encodeURIComponent(account.token)}`;
+      QRCode.toDataURL(quickUrl, {
+        margin: 2,
+        width: 280,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      })
+        .then(url => setQrDataUrl(url))
+        .catch(err => console.error('Error generando QR:', err));
+    } else {
+      setQrDataUrl(null);
+    }
+  }, [account?.token]);
+
   if (!isOpen) return null;
 
   const quickCommand = `copy(sessionStorage.getItem('auth_token') || JSON.parse(localStorage.getItem('auth_data')||'{}')?.data?.access_token)`;
-  const bookmarkletCode = `javascript:(function(){const t=sessionStorage.getItem('auth_token')||JSON.parse(localStorage.getItem('auth_data')||'{}')?.data?.access_token;if(t){prompt('Copia tu token de RedGIFs (Ctrl+C):',t);}else{alert('Inicia sesión primero en redgifs.com');}})();`;
+  const quickShareUrl = account?.token ? `${window.location.origin}/#token=${encodeURIComponent(account.token)}` : '';
 
   const handleCopyCommand = async () => {
     try {
@@ -76,14 +103,15 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
     }
   };
 
-  const handleCopyBookmarklet = async () => {
+  const handleCopyQuickLink = async () => {
+    if (!quickShareUrl) return;
     try {
-      await navigator.clipboard.writeText(bookmarkletCode);
-      setCopiedBookmarklet(true);
-      showToast('¡Código de marcador copiado!');
-      setTimeout(() => setCopiedBookmarklet(false), 3000);
+      await navigator.clipboard.writeText(quickShareUrl);
+      setCopiedQuickLink(true);
+      showToast('¡Enlace de sincronización copiado! Pégalo en tu iPad');
+      setTimeout(() => setCopiedQuickLink(false), 3000);
     } catch {
-      showToast('Por favor selecciona el texto del marcador');
+      showToast('Por favor selecciona el enlace');
     }
   };
 
@@ -188,7 +216,7 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
         <div className="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1">
           {account ? (
             /* ================= VISTA CONECTADO ================= */
-            <div className="space-y-5">
+            <div className="space-y-4">
               {/* Tarjeta de usuario */}
               <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
@@ -239,6 +267,54 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                 </div>
               </div>
 
+              {/* Botón / Tarjeta para pasar sesión a iPad o Móvil */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/30 via-pink-900/20 to-black/40 border border-purple-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-purple-400" />
+                    <span className="text-xs font-bold text-white">¿Quieres usarlo en tu iPad o Móvil?</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(!showQrModal)}
+                    className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>{showQrModal ? 'Ocultar QR' : 'Mostrar QR'}</span>
+                  </button>
+                </div>
+
+                {showQrModal && (
+                  <div className="pt-2 border-t border-white/10 space-y-3 animate-fadeIn">
+                    <div className="flex flex-col sm:flex-row items-center gap-4 bg-black/40 p-3 rounded-xl border border-white/10">
+                      {qrDataUrl && (
+                        <div className="p-2 bg-white rounded-xl shadow-lg shrink-0">
+                          <img src={qrDataUrl} alt="Escanear en iPad" className="w-40 h-40 object-contain" />
+                        </div>
+                      )}
+                      <div className="space-y-2 text-xs text-slate-300">
+                        <p className="font-bold text-white">Escanéalo con la cámara de tu iPad:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
+                          <li>Abre la app <strong>Cámara</strong> de tu iPad y apunta a este código QR.</li>
+                          <li>Toca la notificación amarilla para abrirlo en <strong>Aloha</strong> o <strong>Safari</strong>.</li>
+                          <li>¡Se conectará tu cuenta automáticamente al instante!</li>
+                        </ol>
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={handleCopyQuickLink}
+                            className="w-full py-1.5 px-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-pink-300 font-bold text-[11px] flex items-center justify-center gap-1.5 border border-white/10 transition-colors cursor-pointer"
+                          >
+                            {copiedQuickLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                            <span>{copiedQuickLink ? '¡Enlace copiado!' : 'Copiar enlace directo para enviar por WhatsApp'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Listas Oficiales de RedGIFs */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -270,9 +346,9 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setIsCreatingColl(false)}
-                        className="text-xs text-slate-400 hover:text-white cursor-pointer"
+                        className="text-slate-400 hover:text-white"
                       >
-                        Cancelar
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
@@ -280,20 +356,19 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                       type="text"
                       value={newCollName}
                       onChange={(e) => setNewCollName(e.target.value)}
-                      placeholder="Nombre de la lista (ej. Favoritos VIP, Bailes)..."
-                      autoFocus
-                      className="w-full bg-[#12141c] border border-white/20 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-pink-500 font-medium"
+                      placeholder="Nombre de la lista (ej. Favoritos VIP)..."
+                      className="w-full bg-[#12141c] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-pink-500"
                     />
 
                     <input
                       type="text"
                       value={newCollDesc}
                       onChange={(e) => setNewCollDesc(e.target.value)}
-                      placeholder="Descripción (opcional)..."
-                      className="w-full bg-[#12141c] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-pink-500 font-medium"
+                      placeholder="Descripción opcional..."
+                      className="w-full bg-[#12141c] border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-pink-500"
                     />
 
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 select-none">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={newCollPrivate}
@@ -370,7 +445,7 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                   <span>Conecta tus listas oficiales de www.redgifs.com</span>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Podrás ver tus colecciones ya existentes y guardar cualquier video en ellas con 1 clic. Elige abajo el método que te sea más fácil:
+                  Podrás ver tus colecciones ya existentes y guardar cualquier video en ellas con 1 clic:
                 </p>
               </div>
 
@@ -387,20 +462,20 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                     }`}
                   >
                     <Database className="w-3.5 h-3.5" />
-                    <span>Método Visual (Fácil)</span>
+                    <span>En PC (Fácil)</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setGuideTab('bookmarklet')}
+                    onClick={() => setGuideTab('ipad')}
                     className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                      guideTab === 'bookmarklet'
+                      guideTab === 'ipad'
                         ? 'bg-purple-600 text-white shadow'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    <Bookmark className="w-3.5 h-3.5" />
-                    <span>Marcador (1 clic)</span>
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>iPad / Aloha</span>
                   </button>
 
                   <button
@@ -413,20 +488,23 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                     }`}
                   >
                     <Terminal className="w-3.5 h-3.5" />
-                    <span>Consola</span>
+                    <span>Consola PC</span>
                   </button>
                 </div>
 
-                {/* MÉTODO 1: VISUAL (SIN ESCRIBIR NADA) */}
+                {/* MÉTODO 1: VISUAL EN PC */}
                 {guideTab === 'visual' && (
                   <div className="space-y-2.5 text-xs text-slate-300 animate-fadeIn">
                     <p className="font-bold text-white flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-pink-400" />
-                      Copiar directamente sin usar la consola:
+                      Copiar directamente sin usar la consola (desde el ordenador):
                     </p>
                     <ol className="space-y-2 list-decimal list-inside pl-1 text-[11px] sm:text-xs text-slate-300 leading-relaxed">
                       <li>
-                        En <a href="https://www.redgifs.com" target="_blank" rel="noopener noreferrer" className="text-pink-400 underline font-bold inline-flex items-center gap-0.5">redgifs.com <ExternalLink className="w-2.5 h-2.5" /></a>, haz <strong>clic derecho</strong> en cualquier parte de la página y elige <strong>"Inspeccionar"</strong> (o pulsa <kbd className="px-1 py-0.5 bg-white/10 rounded">F12</kbd>).
+                        En tu PC, abre <a href="https://www.redgifs.com" target="_blank" rel="noopener noreferrer" className="text-pink-400 underline font-bold inline-flex items-center gap-0.5">redgifs.com <ExternalLink className="w-2.5 h-2.5" /></a> con tu sesión iniciada.
+                      </li>
+                      <li>
+                        Haz <strong>clic derecho</strong> en cualquier parte de la página y elige <strong>"Inspeccionar"</strong> (o pulsa <kbd className="px-1 py-0.5 bg-white/10 rounded">F12</kbd>).
                       </li>
                       <li>
                         En la barra superior de esa ventana, pulsa en la pestaña <strong>Application</strong> (Almacenamiento en Firefox).
@@ -445,33 +523,27 @@ export const RedGifsAccountModal: React.FC<RedGifsAccountModalProps> = ({
                   </div>
                 )}
 
-                {/* MÉTODO 2: MARCADOR (1 CLIC EN LA BARRA DE MARCADORES) */}
-                {guideTab === 'bookmarklet' && (
+                {/* MÉTODO 2: IPAD / ALOHA */}
+                {guideTab === 'ipad' && (
                   <div className="space-y-2.5 text-xs text-slate-300 animate-fadeIn">
-                    <p className="font-bold text-white flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-purple-400" />
-                      Un marcador que te muestra el token con 1 solo clic:
+                    <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-200 text-[11px] leading-relaxed">
+                      💡 <strong>¿Por qué no deja en Aloha?</strong> En el iPad, Aloha solo permite guardar enlaces web normales (<code>http://</code> o <code>https://</code>) y bloquea los códigos por seguridad.
+                    </div>
+                    <p className="font-bold text-white text-xs">
+                      La forma más rápida de tenerlo en tu iPad:
                     </p>
                     <ol className="space-y-2 list-decimal list-inside pl-1 text-[11px] sm:text-xs text-slate-300 leading-relaxed">
                       <li>
-                        Crea un marcador nuevo en tu navegador (o arrastra este código a tu barra de marcadores).
+                        Conecta tu cuenta primero en tu <strong>ordenador</strong> siguiendo la pestaña "En PC".
                       </li>
                       <li>
-                        Pon como dirección (URL) este código:
-                        <div className="flex items-center gap-2 bg-black/60 p-2 rounded-xl border border-white/10 font-mono text-[10px] text-purple-300 mt-1">
-                          <span className="truncate flex-1 select-all">{bookmarkletCode}</span>
-                          <button
-                            type="button"
-                            onClick={handleCopyBookmarklet}
-                            className="px-2 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold shrink-0 transition-colors cursor-pointer flex items-center gap-1"
-                          >
-                            {copiedBookmarklet ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                            <span>{copiedBookmarklet ? 'Copiado' : 'Copiar'}</span>
-                          </button>
-                        </div>
+                        Una vez conectado en el PC, pulsa en el botón morado <strong>"📱 Conectar en iPad (Mostrar QR)"</strong>.
                       </li>
                       <li>
-                        Entra en <strong>redgifs.com</strong> y pulsa ese marcador. ¡Te abrirá una ventanita con tu token ya seleccionado para darle a Copiar!
+                        Apunta con la app <strong>Cámara</strong> de tu iPad al código QR que saldrá en la pantalla del ordenador.
+                      </li>
+                      <li className="text-emerald-300 font-medium">
+                        ¡Se abrirá en Aloha y se conectará automáticamente tu cuenta sin escribir nada!
                       </li>
                     </ol>
                   </div>
